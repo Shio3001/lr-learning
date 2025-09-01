@@ -1,4 +1,4 @@
-import { BNF, BNFSet, BNFConcatenation, BNFElement } from "./Interface/bnf";
+import { BNF, BNFSet, BNFConcatenation, BNFElement, BNFError } from "./interface/bnf";
 
 /*
 throwしたり、表現するエラーはすべて日本語で
@@ -35,23 +35,43 @@ export const parseRawBnf = (bnf: string): BNFSet => {
   const bnfSet = new BNFSet();
   bnfSet.bnfs = [];
 
-  lines.forEach((line) => {
+  lines.forEach((line, index) => {
     if (line === "") return; // 空行は無視
     const [left, right] = line.split("->").map((part) => part.trim());
     if (!left || !right) {
-      throw new Error("無効なBNF行: " + line);
+      throw new Error(`${index}\n無効なBNF行: ` + line);
+    }
+
+    if (left == "ε" || (right.includes("ε") && right.trim() !== "ε")) {
+      throw new Error(`${index}\nεは左辺に使えません。また、右辺に使う場合は単独で使ってください: ` + line);
     }
 
     const bnf = new BNF();
 
     bnf.setLeft(left);
+    bnf.setLine(index);
 
     const rightParts = right.split("|").map((part) => part.trim());
     rightParts.forEach((part) => {
       const concatenation = new BNFConcatenation();
+
+      // ワイルドカードの処理
+      // 例: A* -> A, A+ -> A, A? -> A
       const symbols = part.split(/\s+/).map((sym) => sym.trim());
+
       symbols.forEach((sym) => {
         const element = new BNFElement();
+
+        if (sym.includes("ε") && sym !== "ε") {
+          throw new Error("無効なεが含まれた右辺式: " + sym);
+        }
+
+        // εなら空集合
+        if (sym === "ε") {
+          element.setType("terminal");
+          element.setValue(""); // εは空集合を表す
+        }
+
         if (sym.startsWith("'") && sym.endsWith("'")) {
           // 終端記号
           element.setType("terminal");
@@ -88,34 +108,27 @@ export const parseRawBnf = (bnf: string): BNFSet => {
 };
 
 // 名前のbnfを受け取って、構文にミス（存在しない非終端記号）などがあれば、行数を含む警告を投げる
-export const getRawBNFWarningThrows = (
-  bhf: string
-): Array<{
-  error: string;
-  line: number;
-  isError?: boolean;
-}> => {
-  const warnings: Array<{
-    error: string;
-    line: number; // 0始まり、bnfの行数
-    isError?: boolean;
-  }> = [];
+export const getRawBNFWarningThrows = (bhf: string): BNFError => {
+  const warnings: BNFError = [];
   const bnfSet = (() => {
     try {
       return parseRawBnf(bhf);
     } catch (e) {
       warnings.push({
-        error: (e as Error).message,
-        line: 0,
+        error: (e as Error).message.split("\n")[1],
+        line: (e as Error).message.split("\n")[0] ? parseInt((e as Error).message.split("\n")[0]) : 0,
+        isError: true,
       });
       return new BNFSet();
     }
   })();
   const nonTerminals = new Set<string>();
   const terminals = new Set<string>();
+  const nonTerminalsLeftLine = new Map<string, number>(); // 非終端記号が左辺に現れた行数
 
   bnfSet.bnfs.forEach((bnf) => {
-    nonTerminals.add(bnf.left);
+    // 非終端記号を収集
+    nonTerminalsLeftLine.set(bnf.left, bnf.line);
     bnf.right.forEach((concat) => {
       concat.elements.forEach((elem) => {
         if (elem.type === "terminal") {
@@ -137,7 +150,7 @@ export const getRawBNFWarningThrows = (
     bnf.right.forEach((concat) => {
       concat.elements.forEach((elem) => {
         // 大文字以外なら、終端記号の意図として使っているならば、シングルクオーテーションで囲むべき
-        if (elem.type === "nonterminal" && /[^A-Z_]/.test(elem.value) && !terminals.has(elem.value)) {
+        if (elem.type === "nonterminal" && /[^A-Z_]/.test(elem.value) && !terminals.has(elem.value) && elem.value !== "ε") {
           warnings.push({
             error: `非終端記号 '${elem.value}' は大文字とアンダースコアのみで構成されるべきです。終端記号として使用する場合はシングルクオーテーションで囲んでください。`,
             line: index, // 行数は0始まりにする
@@ -146,7 +159,7 @@ export const getRawBNFWarningThrows = (
         }
 
         // 定義されていない非終端記号を使用している
-        else if (elem.type === "nonterminal" && !definedNonTerminals.has(elem.value)) {
+        else if (elem.type === "nonterminal" && !definedNonTerminals.has(elem.value) && elem.value !== "ε") {
           warnings.push({
             error: `未定義の非終端記号 '${elem.value}' が使用されています。`,
             line: index, // 行数は0始まりにする
@@ -159,10 +172,15 @@ export const getRawBNFWarningThrows = (
 
   // 使用していない非終端記号を探す
   definedNonTerminals.forEach((nt) => {
+    if (nt === "S") {
+      // Sは常に使用されるべき
+      return;
+    }
+
     if (!nonTerminals.has(nt)) {
       warnings.push({
         error: `未使用の非終端記号 '${nt}' があります。`,
-        line: 0, // 行数不明
+        line: nonTerminalsLeftLine.get(nt) || -1,
         isError: false,
       });
     }

@@ -10,6 +10,7 @@ const MainPage = () => {
     <div>
       <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>
       <Textarea handler={setBnf} />
+      <p>ε : 空集合記号（コピーして使ってください）</p>
       <div>
         {/* エラーをそれぞれpタグで囲って表示 */}
         {getRawBNFWarningThrows(bnf).map((e, i) => (

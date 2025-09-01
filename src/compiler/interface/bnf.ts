@@ -1,10 +1,12 @@
 export class BNFElement {
   type: "terminal" | "nonterminal";
   value: string;
+  wildcard: string;
 
   constructor() {
     this.type = "nonterminal";
     this.value = "";
+    this.wildcard = "";
   }
 
   setType(t: "terminal" | "nonterminal") {
@@ -13,6 +15,10 @@ export class BNFElement {
 
   setValue(v: string) {
     this.value = v;
+  }
+
+  setWildcard(w: string) {
+    this.wildcard = w;
   }
 }
 
@@ -31,6 +37,7 @@ export class BNFConcatenation {
 export class BNF {
   left: string;
   right: BNFConcatenation[];
+  line: number = 0; // このBNFが定義されている行数（0始まり）
 
   constructor() {
     this.left = "";
@@ -43,6 +50,10 @@ export class BNF {
 
   addRight(r: BNFConcatenation) {
     this.right.push(r);
+  }
+
+  setLine(line: number) {
+    this.line = line;
   }
 }
 
@@ -57,3 +68,9 @@ export class BNFSet {
     this.bnfs.push(b);
   }
 }
+
+export type BNFError = Array<{
+  error: string;
+  line: number; // 0始まり、bnfの行数
+  isError?: boolean;
+}>;
