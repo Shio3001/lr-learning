@@ -38,7 +38,7 @@ export const parseRawBnf = (bnf: string): BNFSet => {
     if (line === "") return; // 空行は無視
     const [left, right] = line.split("->").map((part) => part.trim());
     if (!left || !right) {
-      throw new Error(`${index}\n無効なBNF行: ` + line);
+      throw new Error(`${index}\n無効な構文定義 行: ` + line);
     }
     if (left == "ε") {
       throw new Error(`${index}\nεは左辺に使えません。` + line);
@@ -195,7 +195,7 @@ export const getRawBNFWarningThrows = (bhf: string): BNFError => {
   // 1行目はSから始まるべき
   if (bnfSet.getBNFs().length > 0 && bnfSet.getBNFs()[0].getLeft() !== "S") {
     warnings.push({
-      error: "最初のBNFは'S'から始まる必要があります。",
+      error: "最初の構文定義は'S'から始まる必要があります。",
       line: 0,
       isError: true,
     });

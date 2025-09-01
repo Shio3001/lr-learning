@@ -2,15 +2,17 @@ import { LRItem } from "./lrItem";
 import { BNFSet, BNFConcatenation, BNFElement } from "./bnf";
 
 export class LRItemSet {
+  //最終的なLRオートマトン集合の、ノードの状態を表す成果物
   private lrItems: LRItem[];
 
   // 遷移先
   private goto: Map<string, number>;
 
-  // このclassにitemを渡す時点で、item.advance()を実行していること！
-  constructor() {
+  // このclassにitemを渡す時点で、item.advance()を実行していること！展開の基準となります
+  constructor(private item: LRItem) {
     this.lrItems = [];
     this.goto = new Map<string, number>();
+    this.addItem(this.item);
   }
 
   /**
@@ -19,8 +21,8 @@ export class LRItemSet {
    * そのため、次のノードに渡すべきdotを含んだLRItemを返却する。この過程では、Advanceを行っておく。
    * @param item
    */
-  closure(BNFSet: BNFSet, item: LRItem): { [name: string]: LRItem } {
-    const nextElement = item.getDotNextElement();
+  closure(BNFSet: BNFSet): { [name: string]: LRItem } {
+    const nextElement = this.item.getDotNextElement();
 
     //ここでのname/keyは遷移すべきstateを表現する
     const rvItems: { [name: string]: LRItem } = {};
@@ -36,14 +38,14 @@ export class LRItemSet {
           this.addItem(newItem);
           rvItems[newItem.getDotNextElement().getValue()] = newItem.advance();
         });
-        rvItems[item.getDotNextElement().getValue()] = item.advance();
+        rvItems[this.item.getDotNextElement().getValue()] = this.item.advance();
       } else {
         // 終端記号なら、そのまま追加
-        this.addItem(item);
+        this.addItem(this.item);
       }
     }
 
-    console.log("クロージャ計算", item, rvItems);
+    console.log("クロージャ計算", this.item, rvItems);
     return rvItems;
   }
 
@@ -81,7 +83,7 @@ export class LRItemSets {
       currentItem: LRItem; //展開するべきItem(dotは進めている)
     }> = [];
 
-    const currentItemSet = new LRItemSet();
+    const currentItemSet = new LRItemSet(item);
     que.push({
       currentItemSetIndex: this.addItemSet(currentItemSet),
       currentItem: item,
@@ -95,10 +97,10 @@ export class LRItemSets {
       }
 
       const { currentItemSetIndex, currentItem } = front;
-      const nextItems = this.itemSets[currentItemSetIndex].closure(this.BNFSet, currentItem);
+      const nextItems = this.itemSets[currentItemSetIndex].closure(this.BNFSet);
 
       for (const [nextState, nItem] of Object.entries(nextItems)) {
-        const nextItemSetIndex = this.addItemSet(new LRItemSet());
+        const nextItemSetIndex = this.addItemSet(new LRItemSet(nItem));
         que.push({
           currentItemSetIndex: nextItemSetIndex,
           currentItem: nItem,
@@ -107,18 +109,6 @@ export class LRItemSets {
         // 状態遷移を紐づける
         this.itemSets[currentItemSetIndex].addGoto(nextState, nextItemSetIndex);
       }
-
-      //   que.push(
-      //     ...Object.values(nextItems).map((nextItem) => ({
-      //       currentItemSetIndex: this.addItemSet(new LRItemSet()),
-      //       currentItem: nextItem,
-      //     }))
-      //   );
-
-      //   // 状態遷移を紐づける
-      //   Object.entries(nextItems).forEach(([nextState, nextItem]) => {
-      //     this.itemSets[currentItemSetIndex].addGoto(nextState, nItem);
-      //   });
     }
   }
 
