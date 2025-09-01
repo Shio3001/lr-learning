@@ -1,7 +1,7 @@
 export class BNFElement {
-  type: "terminal" | "nonterminal";
-  value: string;
-  wildcard: string;
+  private type: "terminal" | "nonterminal";
+  private value: string;
+  private wildcard: string;
 
   constructor() {
     this.type = "nonterminal";
@@ -20,10 +20,22 @@ export class BNFElement {
   setWildcard(w: string) {
     this.wildcard = w;
   }
+
+  getWildcard() {
+    return this.wildcard;
+  }
+
+  getType() {
+    return this.type;
+  }
+
+  getValue() {
+    return this.value;
+  }
 }
 
 export class BNFConcatenation {
-  elements: BNFElement[];
+  private elements: BNFElement[];
 
   constructor() {
     this.elements = [];
@@ -32,12 +44,20 @@ export class BNFConcatenation {
   addElement(e: BNFElement) {
     this.elements.push(e);
   }
+
+  getElements() {
+    return this.elements;
+  }
+
+  getElementAt(index: number) {
+    return this.elements[index];
+  }
 }
 
 export class BNF {
-  left: string;
-  right: BNFConcatenation[];
-  line: number = 0; // このBNFが定義されている行数（0始まり）
+  private left: string;
+  private right: BNFConcatenation[];
+  private line: number = 0; // このBNFが定義されている行数（0始まり）
 
   constructor() {
     this.left = "";
@@ -55,13 +75,29 @@ export class BNF {
   setLine(line: number) {
     this.line = line;
   }
+
+  getLeft() {
+    return this.left;
+  }
+
+  getRight() {
+    return this.right;
+  }
+
+  getLine() {
+    return this.line;
+  }
 }
 
 export class BNFSet {
-  bnfs: BNF[];
+  private bnfs: BNF[];
 
   constructor() {
     this.bnfs = [];
+  }
+
+  getBNFs() {
+    return this.bnfs;
   }
 
   addBNF(b: BNF) {

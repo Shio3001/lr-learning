@@ -33,7 +33,6 @@ throwしたり、表現するエラーはすべて日本語で
 export const parseRawBnf = (bnf: string): BNFSet => {
   const lines = bnf.split("\n").map((line) => line.trim());
   const bnfSet = new BNFSet();
-  bnfSet.bnfs = [];
 
   lines.forEach((line, index) => {
     if (line === "") return; // 空行は無視
@@ -41,11 +40,9 @@ export const parseRawBnf = (bnf: string): BNFSet => {
     if (!left || !right) {
       throw new Error(`${index}\n無効なBNF行: ` + line);
     }
-
-    if (left == "ε" || (right.includes("ε") && right.trim() !== "ε")) {
-      throw new Error(`${index}\nεは左辺に使えません。また、右辺に使う場合は単独で使ってください: ` + line);
+    if (left == "ε") {
+      throw new Error(`${index}\nεは左辺に使えません。` + line);
     }
-
     const bnf = new BNF();
 
     bnf.setLeft(left);
@@ -53,6 +50,10 @@ export const parseRawBnf = (bnf: string): BNFSet => {
 
     const rightParts = right.split("|").map((part) => part.trim());
     rightParts.forEach((part) => {
+      if (part.includes("ε") && part.trim() !== "ε") {
+        throw new Error(`${index}\n右辺にεを含める場合は単独で使ってください: ` + part);
+      }
+
       const concatenation = new BNFConcatenation();
 
       // ワイルドカードの処理
@@ -126,15 +127,15 @@ export const getRawBNFWarningThrows = (bhf: string): BNFError => {
   const terminals = new Set<string>();
   const nonTerminalsLeftLine = new Map<string, number>(); // 非終端記号が左辺に現れた行数
 
-  bnfSet.bnfs.forEach((bnf) => {
+  bnfSet.getBNFs().forEach((bnf) => {
     // 非終端記号を収集
-    nonTerminalsLeftLine.set(bnf.left, bnf.line);
-    bnf.right.forEach((concat) => {
-      concat.elements.forEach((elem) => {
-        if (elem.type === "terminal") {
-          terminals.add(elem.value);
+    nonTerminalsLeftLine.set(bnf.getLeft(), bnf.getLine());
+    bnf.getRight().forEach((concat) => {
+      concat.getElements().forEach((elem) => {
+        if (elem.getType() === "terminal") {
+          terminals.add(elem.getValue());
         } else {
-          nonTerminals.add(elem.value);
+          nonTerminals.add(elem.getValue());
         }
       });
     });
@@ -142,26 +143,31 @@ export const getRawBNFWarningThrows = (bhf: string): BNFError => {
 
   // 存在しない非終端記号を探す
   const definedNonTerminals = new Set<string>();
-  bnfSet.bnfs.forEach((bnf) => {
-    definedNonTerminals.add(bnf.left);
+  bnfSet.getBNFs().forEach((bnf) => {
+    definedNonTerminals.add(bnf.getLeft());
   });
 
-  bnfSet.bnfs.forEach((bnf, index) => {
-    bnf.right.forEach((concat) => {
-      concat.elements.forEach((elem) => {
+  bnfSet.getBNFs().forEach((bnf, index) => {
+    bnf.getRight().forEach((concat) => {
+      concat.getElements().forEach((elem) => {
         // 大文字以外なら、終端記号の意図として使っているならば、シングルクオーテーションで囲むべき
-        if (elem.type === "nonterminal" && /[^A-Z_]/.test(elem.value) && !terminals.has(elem.value) && elem.value !== "ε") {
+        if (elem.getType() === "nonterminal" && /[^A-Z_]/.test(elem.getValue()) && !terminals.has(elem.getValue()) && elem.getValue() !== "ε") {
           warnings.push({
-            error: `非終端記号 '${elem.value}' は大文字とアンダースコアのみで構成されるべきです。終端記号として使用する場合はシングルクオーテーションで囲んでください。`,
+            error: `非終端記号 '${elem.getValue()}' は大文字とアンダースコアのみで構成されるべきです。終端記号として使用する場合はシングルクオーテーションで囲んでください。`,
             line: index, // 行数は0始まりにする
             isError: true,
           });
-        }
-
-        // 定義されていない非終端記号を使用している
-        else if (elem.type === "nonterminal" && !definedNonTerminals.has(elem.value) && elem.value !== "ε") {
+        } else if (elem.getType() === "nonterminal" && elem.getValue() === "") {
           warnings.push({
-            error: `未定義の非終端記号 '${elem.value}' が使用されています。`,
+            error: `非終端記号が空であることを表現したい場合は'ε'を使用してください。`,
+            line: index,
+            isError: true,
+          });
+        }
+        // 定義されていない非終端記号を使用している
+        else if (elem.getType() === "nonterminal" && !definedNonTerminals.has(elem.getValue()) && elem.getValue() !== "ε") {
+          warnings.push({
+            error: `未定義の非終端記号 '${elem.getValue()}' が使用されています。`,
             line: index, // 行数は0始まりにする
             isError: true,
           });
@@ -187,7 +193,7 @@ export const getRawBNFWarningThrows = (bhf: string): BNFError => {
   });
 
   // 1行目はSから始まるべき
-  if (bnfSet.bnfs.length > 0 && bnfSet.bnfs[0].left !== "S") {
+  if (bnfSet.getBNFs().length > 0 && bnfSet.getBNFs()[0].getLeft() !== "S") {
     warnings.push({
       error: "最初のBNFは'S'から始まる必要があります。",
       line: 0,
