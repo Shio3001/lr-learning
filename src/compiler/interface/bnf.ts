@@ -1,12 +1,12 @@
 export class BNFElement {
-  private type: "terminal" | "nonterminal";
+  private type: "terminal" | "nonterminal" | null;
   private value: string;
   private wildcard: string;
 
-  constructor() {
-    this.type = "nonterminal";
-    this.value = "";
-    this.wildcard = "";
+  constructor(type: "terminal" | "nonterminal" | null = null, value: string = "", wildcard: string = "") {
+    this.type = type;
+    this.value = value;
+    this.wildcard = wildcard;
   }
 
   setType(t: "terminal" | "nonterminal") {
@@ -35,9 +35,11 @@ export class BNFElement {
 }
 
 export class BNFConcatenation {
+  private left: string;
   private elements: BNFElement[];
 
-  constructor() {
+  constructor(left: string) {
+    this.left = left;
     this.elements = [];
   }
 
@@ -51,6 +53,10 @@ export class BNFConcatenation {
 
   getElementAt(index: number) {
     return this.elements[index];
+  }
+
+  getLeft() {
+    return this.left;
   }
 }
 
@@ -102,6 +108,34 @@ export class BNFSet {
 
   addBNF(b: BNF) {
     this.bnfs.push(b);
+  }
+
+  getBNFbyLeft(left: string): BNFConcatenation[] {
+    const result: BNFConcatenation[] = [];
+    this.bnfs.forEach((bnf) => {
+      if (bnf.getLeft() === left) {
+        result.push(...bnf.getRight());
+      }
+    });
+    return result;
+  }
+
+  getStartSymbol(): BNFConcatenation {
+    // Sから始まる右辺の通りが1つであれば、そのBNFConcatenationを返す
+    const bc = this.getBNFbyLeft("S");
+    if (bc.length === 1) {
+      return bc[0];
+    }
+
+    // S´ -> Sを追記し、それを返す
+    const sDash = "S´";
+    const nbc = new BNFConcatenation(sDash);
+    nbc.addElement(new BNFElement("nonterminal", "S"));
+    const newBNF = new BNF();
+    newBNF.setLeft(sDash);
+    newBNF.addRight(nbc);
+    this.addBNF(newBNF);
+    return nbc;
   }
 }
 

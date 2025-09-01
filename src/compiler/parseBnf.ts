@@ -54,7 +54,7 @@ export const parseRawBnf = (bnf: string): BNFSet => {
         throw new Error(`${index}\n右辺にεを含める場合は単独で使ってください: ` + part);
       }
 
-      const concatenation = new BNFConcatenation();
+      const concatenation = new BNFConcatenation(left);
 
       // ワイルドカードの処理
       // 例: A* -> A, A+ -> A, A? -> A

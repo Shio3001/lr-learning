@@ -1,10 +1,12 @@
 type TextareaProps = {
   handler?: (t: string) => void;
+  text?: string;
 };
 
 const Textarea = (props: TextareaProps) => {
   return (
     <textarea
+      value={props.text}
       onChange={(e) => {
         props.handler?.(e.target.value);
       }}
