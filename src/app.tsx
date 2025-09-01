@@ -1,3 +1,4 @@
+import React from "react";
 // reactのエンドリーポイント
 import MainPage from "./page/mainpage";
 const App = () => {

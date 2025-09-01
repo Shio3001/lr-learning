@@ -8,16 +8,17 @@ const MainPage = () => {
   const [bnf, setBnf] = useState<string>("");
   return (
     <div>
-      <h1>プログラミング言語処理系 LR(0)報 構文解析 支援サイト</h1>
+      <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>
       <Textarea handler={setBnf} />
       <div>
-        <p>
-          {getRawBNFWarningThrows(bnf)
-            .map((w) => `Line ${w.line}: ${w.error}`)
-            .join("\n") || "警告はありません"}
-        </p>
+        {/* エラーをそれぞれpタグで囲って表示 */}
+        {getRawBNFWarningThrows(bnf).map((e, i) => (
+          <p key={i} style={{ color: e.isError ? "red" : "orange" }}>
+            (行: {e.line}) {e.error}
+          </p>
+        ))}
       </div>
-      <Button />
+      <Button text="この構文定義で構築を開始する" />
       <div></div>
     </div>
   );

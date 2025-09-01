@@ -1,5 +1,6 @@
 type ButtonProps = {
   handler?: () => void;
+  text: string;
 };
 
 const Button = (props: ButtonProps) => {
@@ -10,7 +11,7 @@ const Button = (props: ButtonProps) => {
       }}
       className="my-button"
     >
-      Click Me
+      {props.text}
     </button>
   );
 };

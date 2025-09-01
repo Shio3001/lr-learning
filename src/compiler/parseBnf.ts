@@ -1,4 +1,9 @@
 import { BNF, BNFSet, BNFConcatenation, BNFElement } from "./Interface/bnf";
+
+/*
+throwしたり、表現するエラーはすべて日本語で
+*/
+
 /**
  *  S -> A B C D
  *  A -> 'a' | 'A' 'a'
@@ -25,7 +30,6 @@ import { BNF, BNFSet, BNFConcatenation, BNFElement } from "./Interface/bnf";
  *   "E": [["'e'", "+"]],
  * }
  * */
-
 export const parseRawBnf = (bnf: string): BNFSet => {
   const lines = bnf.split("\n").map((line) => line.trim());
   const bnfSet = new BNFSet();
@@ -35,46 +39,51 @@ export const parseRawBnf = (bnf: string): BNFSet => {
     if (line === "") return; // 空行は無視
     const [left, right] = line.split("->").map((part) => part.trim());
     if (!left || !right) {
-      throw new Error(`Invalid BNF line: ${line}`);
+      throw new Error("無効なBNF行: " + line);
     }
 
     const bnf = new BNF();
-    bnf.left = left;
-    bnf.right = [];
+
+    bnf.setLeft(left);
 
     const rightParts = right.split("|").map((part) => part.trim());
     rightParts.forEach((part) => {
-      const symbols = part.split(/\s+/).map((sym) => sym.trim());
       const concatenation = new BNFConcatenation();
-      concatenation.elements = [];
-
+      const symbols = part.split(/\s+/).map((sym) => sym.trim());
       symbols.forEach((sym) => {
         const element = new BNFElement();
         if (sym.startsWith("'") && sym.endsWith("'")) {
-          element.type = "terminal";
-          element.value = sym.slice(1, -1);
+          // 終端記号
+          element.setType("terminal");
+          element.setValue(sym.slice(1, -1)); // 'a' -> a
         } else if (sym.endsWith("?")) {
-          element.type = "nonterminal";
-          element.value = sym.slice(0, -1);
-          // オプションは後で処理
+          // オプション
+          element.setType("nonterminal");
+          element.setValue(sym.slice(0, -1)); // A? -> A
+          // オプションは特別な扱いが必要ならここで処理
         } else if (sym.endsWith("*")) {
-          element.type = "nonterminal";
-          element.value = sym.slice(0, -1);
-          // 繰り返しは後で処理
+          // 0回以上の繰り返し
+          element.setType("nonterminal");
+          element.setValue(sym.slice(0, -1)); // A* -> A
+          // 繰り返しは特別な扱いが必要ならここで処理
         } else if (sym.endsWith("+")) {
-          element.type = "nonterminal";
-          element.value = sym.slice(0, -1);
-          // 1回以上の繰り返しは後で処理
+          // 1回以上の繰り返し
+          element.setType("nonterminal");
+          element.setValue(sym.slice(0, -1)); // A+ -> A
+          // 繰り返しは特別な扱いが必要ならここで処理
         } else {
-          element.type = "nonterminal";
-          element.value = sym;
+          // 非終端記号
+          element.setType("nonterminal");
+          element.setValue(sym);
         }
-        concatenation.elements.push(element);
+        concatenation.addElement(element);
       });
-      bnf.right.push(concatenation);
+      bnf.addRight(concatenation);
     });
-    bnfSet.bnfs.push(bnf);
+
+    bnfSet.addBNF(bnf);
   });
+
   return bnfSet;
 };
 
@@ -84,63 +93,89 @@ export const getRawBNFWarningThrows = (
 ): Array<{
   error: string;
   line: number;
+  isError?: boolean;
 }> => {
   const warnings: Array<{
     error: string;
-    line: number;
+    line: number; // 0始まり、bnfの行数
+    isError?: boolean;
   }> = [];
-  const bnfSet = parseRawBnf(bhf);
+  const bnfSet = (() => {
+    try {
+      return parseRawBnf(bhf);
+    } catch (e) {
+      warnings.push({
+        error: (e as Error).message,
+        line: 0,
+      });
+      return new BNFSet();
+    }
+  })();
   const nonTerminals = new Set<string>();
   const terminals = new Set<string>();
 
-  // すべての非終端記号を収集
   bnfSet.bnfs.forEach((bnf) => {
     nonTerminals.add(bnf.left);
-    bnf.right.forEach((concatenation) => {
-      concatenation.elements.forEach((element) => {
-        if (element.type === "terminal") {
-          terminals.add(element.value);
+    bnf.right.forEach((concat) => {
+      concat.elements.forEach((elem) => {
+        if (elem.type === "terminal") {
+          terminals.add(elem.value);
         } else {
-          nonTerminals.add(element.value);
+          nonTerminals.add(elem.value);
         }
       });
     });
   });
 
-  // 各行をチェックして、存在しない非終端記号を探す
-  const lines = bhf.split("\n").map((line) => line.trim());
-  lines.forEach((line, index) => {
-    if (line === "") return; // 空行は無視
-    const [left, right] = line.split("->").map((part) => part.trim());
-    if (!left || !right) {
-      warnings.push({
-        error: `Invalid BNF line: ${line}`,
-        line: index + 1,
-      });
-      return;
-    }
+  // 存在しない非終端記号を探す
+  const definedNonTerminals = new Set<string>();
+  bnfSet.bnfs.forEach((bnf) => {
+    definedNonTerminals.add(bnf.left);
+  });
 
-    const rightParts = right.split("|").map((part) => part.trim());
-    rightParts.forEach((part) => {
-      const symbols = part.split(/\s+/).map((sym) => sym.trim());
-      symbols.forEach((sym) => {
-        let symbolName = sym;
-        if (sym.startsWith("'") && sym.endsWith("'  ")) {
-          // 終端記号は無視
-          return;
-        }
-        if (sym.endsWith("?") || sym.endsWith("*") || sym.endsWith("+")) {
-          symbolName = sym.slice(0, -1);
-        }
-        if (!nonTerminals.has(symbolName)) {
+  bnfSet.bnfs.forEach((bnf, index) => {
+    bnf.right.forEach((concat) => {
+      concat.elements.forEach((elem) => {
+        // 大文字以外なら、終端記号の意図として使っているならば、シングルクオーテーションで囲むべき
+        if (elem.type === "nonterminal" && /[^A-Z_]/.test(elem.value) && !terminals.has(elem.value)) {
           warnings.push({
-            error: `Undefined non-terminal symbol: ${symbolName}`,
-            line: index + 1,
+            error: `非終端記号 '${elem.value}' は大文字とアンダースコアのみで構成されるべきです。終端記号として使用する場合はシングルクオーテーションで囲んでください。`,
+            line: index, // 行数は0始まりにする
+            isError: true,
+          });
+        }
+
+        // 定義されていない非終端記号を使用している
+        else if (elem.type === "nonterminal" && !definedNonTerminals.has(elem.value)) {
+          warnings.push({
+            error: `未定義の非終端記号 '${elem.value}' が使用されています。`,
+            line: index, // 行数は0始まりにする
+            isError: true,
           });
         }
       });
     });
   });
+
+  // 使用していない非終端記号を探す
+  definedNonTerminals.forEach((nt) => {
+    if (!nonTerminals.has(nt)) {
+      warnings.push({
+        error: `未使用の非終端記号 '${nt}' があります。`,
+        line: 0, // 行数不明
+        isError: false,
+      });
+    }
+  });
+
+  // 1行目はSから始まるべき
+  if (bnfSet.bnfs.length > 0 && bnfSet.bnfs[0].left !== "S") {
+    warnings.push({
+      error: "最初のBNFは'S'から始まる必要があります。",
+      line: 0,
+      isError: true,
+    });
+  }
 
   return warnings;
 };
