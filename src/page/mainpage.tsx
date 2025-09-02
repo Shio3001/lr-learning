@@ -7,7 +7,8 @@ import { BNFSet } from "../compiler/interface/bnf";
 
 import { useEffect, useState } from "react";
 const MainPage = () => {
-  const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
+  // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
+  const [bnf, setBnf] = useState<string>("S->LIST 'EoF'\nLIST->'LPAR' SEQ 'RPAR' | 'NUM'\nSEQ -> LIST\nSEQ -> SEQ 'COMMA' LIST");
   return (
     <div>
       <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>

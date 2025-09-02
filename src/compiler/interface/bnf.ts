@@ -39,6 +39,10 @@ export class BNFElement {
   getHash(): string {
     return encryptSha256(`${this.type}|${this.value}|${this.wildcard}`);
   }
+
+  getHashByDot(dot: number): string {
+    return encryptSha256(`${this.type}|${this.value}|${this.wildcard}|${dot}`);
+  }
 }
 
 export class BNFConcatenation {
