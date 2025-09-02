@@ -9,15 +9,16 @@ export class LRItemSet {
   private goto: Map<string, number>;
 
   // このclassにitemを渡す時点で、item.advance()を実行していること！展開の基準となります
-  constructor(private readonly item: LRItem) {
+  constructor(private readonly initItems: Array<LRItem>) {
     this.lrItems = [];
+
     this.goto = new Map<string, number>();
-    this.addItem(this.item);
+    this.initItems.forEach((item) => this.addItem(item));
   }
 
   //private readonly itemをもとに、この集合の1つのハッシュ値を生成する
   getHash(): string {
-    return encryptSha256(this.item.getHash());
+    return encryptSha256(this.lrItems.map((item) => item.getHash()).join(","));
   }
 
   /**
@@ -28,23 +29,45 @@ export class LRItemSet {
    * @param item コアとなるLRItem
    * @returns 次には制すべきLRItemの集合（keyは遷移すべき状態名）
    */
-  closure(BNFSet: BNFSet): { [name: string]: LRItem } {
-    const nextElement = this.item.getDotNextElement();
+  closure(BNFSet: BNFSet): { [name: string]: Array<LRItem> } {
+    // const nextElement = this.item.getDotNextElement();
+    const nextElements = this.initItems.map((item) => item.getDotNextElement());
+    // const nextElementsDotPositions = this.initItems.map((item) => item.getDotPosition());
 
     //ここでのname/keyは遷移すべきstateを表現する
-    const rvItems: { [name: string]: LRItem } = {};
+    const rvItems: { [name: string]: Array<LRItem> } = {};
 
-    if (!nextElement) {
-      return rvItems;
+    const pushRvItems = (name: string, item: LRItem) => {
+      if (rvItems[name]) {
+        // ここでもhashを使って重複排除したい
+        const hashSet = new Set<string>();
+        rvItems[name].forEach((existingItem) => {
+          hashSet.add(existingItem.getHash());
+        });
+
+        if (!hashSet.has(item.getHash())) {
+          rvItems[name].push(item);
+        }
+      } else {
+        rvItems[name] = [item];
+      }
+    };
+
+    if (!nextElements) {
+      return {};
     }
-    const que = [
-      {
-        queElement: nextElement,
-        queDotPosition: this.item.getDotPosition(),
-      },
-    ];
+    const que = nextElements.map((_, index) => ({
+      queNewItem: this.initItems[index], //次に処理するべきLRItem
+      // queElement: element, // 次に処理するべき要素のdotの直後の要素
+    }));
 
-    rvItems[this.item.getDotNextElement().getValue()] = this.item.advance();
+    // rvItems[this.item.getDotNextElement().getValue()] = [this.item.advance()];
+
+    // nextElements.forEach((element, index) => {
+    //   if (element) {
+    //     rvItems[element.getValue()] = [this.initItems[index].advance()];
+    //   }
+    // });
 
     const hashSet = new Set<string>();
 
@@ -54,47 +77,54 @@ export class LRItemSet {
         break;
       }
 
-      const { queElement, queDotPosition } = currentQue;
+      const { queNewItem } = currentQue;
+      const queElement = queNewItem.getDotNextElement();
 
       if (queElement) {
-        if (hashSet.has(queElement.getHashByDot(queDotPosition))) {
-          continue;
-        }
-
-        hashSet.add(queElement.getHashByDot(queDotPosition));
-
         // 次の要素が存在する場合の処理
         // 非終端記号なら、クロージャを計算する
         if (queElement.getType() === "nonterminal") {
+          // rvItems[queElement.getValue()] = [queNewItem.advance()];
+          pushRvItems(queElement.getValue(), queNewItem.advance());
+
           // クロージャを計算する処理
           BNFSet.getBNFbyLeft(queElement.getValue()).forEach((concat) => {
             const newItem = new LRItem(concat);
+
+            if (hashSet.has(newItem.getHash())) {
+              return;
+            }
+            hashSet.add(newItem.getHash());
             this.addItem(newItem);
 
             const dotNext = newItem.getDotNextElement();
 
             if (rvItems[dotNext.getValue()]) {
-              console.warn("LR(0)のクロージャ計算で、同じ遷移先が複数回出現しました", dotNext.getValue());
-              rvItems[dotNext.getValue() + "_"] = newItem.advance();
+              console.warn("LR(0)のクロージャ計算で、同じ遷移先が複数回出現しました", dotNext.getValue(), rvItems[dotNext.getValue()]);
+              // rvItems[dotNext.getValue()].push(newItem.advance());
+              pushRvItems(dotNext.getValue(), newItem.advance());
+              console.log("追加されたアイテム", rvItems[dotNext.getValue()]);
             } else {
-              rvItems[dotNext.getValue()] = newItem.advance();
+              // rvItems[dotNext.getValue()] = [newItem.advance()];
+              pushRvItems(dotNext.getValue(), newItem.advance());
             }
 
-            if (dotNext.getType() === "nonterminal") {
-              que.push({
-                queElement: dotNext,
-                queDotPosition: 0,
-              });
-            }
+            // if (dotNext.getType() === "nonterminal") {
+            que.push({
+              queNewItem: newItem,
+            });
+            // }
           });
         } else {
-          // 終端記号なら、そのまま追加
-          this.addItem(this.item);
+          // 終端記号なら、そのままrvに追加
+          pushRvItems(queElement.getValue(), queNewItem.advance());
         }
       }
     }
 
-    console.log("クロージャ計算", this.item, rvItems);
+    console.log("クロージャ計算", this.initItems, rvItems);
+
+    // 変換して渡す
     return rvItems;
   }
 
@@ -137,17 +167,17 @@ export class LRItemSets {
   calcClosure(startItem: LRItem) {
     const que: Array<{
       queItemSetIndex: number; // 計算元のItemSetのindex
-      queItem: LRItem; //展開するべきItem(dotは進めている)
+      // queItems: Array<LRItem>; //展開するべきItem(dotは進めている)
     }> = [];
 
     // nodehash hash:nodeindex
     const nodeHash: Map<string, number> = new Map();
 
-    const startItemSet = new LRItemSet(startItem);
+    const startItemSet = new LRItemSet([startItem]);
 
     que.push({
       queItemSetIndex: this.addItemSet(startItemSet),
-      queItem: startItem,
+      // queItems: [startItem],
     });
 
     while (que.length > 0) {
@@ -163,26 +193,29 @@ export class LRItemSets {
         throw new Error("Unexpected null itemSet");
       }
 
-      const nextItems = this.itemSets[queItemSetIndex].closure(this.BNFSet);
+      const nextItemSet = this.itemSets[queItemSetIndex].closure(this.BNFSet);
 
-      for (const [nextState, nItem] of Object.entries(nextItems)) {
-        if (nodeHash.has(nItem.getHash())) {
+      for (const [nextState, nItemList] of Object.entries(nextItemSet)) {
+        const nItemListHash = (() => {
+          return nItemList.map((item) => item.getHash()).join(",");
+        })();
+
+        if (nodeHash.has(nItemListHash)) {
           // すでにhashがあった場合、前の状態から現在の状態へ遷移は、すでにある状態へつなげる
-          const equalNodeIndex = nodeHash.get(nItem.getHash());
+          const equalNodeIndex = nodeHash.get(nItemListHash);
 
           if (equalNodeIndex !== undefined) {
             this.itemSets[queItemSetIndex].addGoto(nextState, equalNodeIndex);
             continue;
           }
         }
-
-        const nextItemSetIndex = this.addItemSet(new LRItemSet(nItem));
-        const getHash = nItem.getHash();
-        nodeHash.set(getHash, nextItemSetIndex);
+        const nItemSet = new LRItemSet(nItemList);
+        const nextItemSetIndex = this.addItemSet(nItemSet);
+        nodeHash.set(nItemListHash, nextItemSetIndex);
 
         que.push({
           queItemSetIndex: nextItemSetIndex,
-          queItem: nItem,
+          // queItems: nItemList,
         });
 
         // 状態遷移を紐づける
