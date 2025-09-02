@@ -1,7 +1,7 @@
 import { BNFConcatenation, BNFElement } from "./bnf";
 
 export class LRItem {
-  constructor(private concatenation: BNFConcatenation, private dotPosition: number = 0) {}
+  constructor(private readonly concatenation: BNFConcatenation, private readonly dotPosition: number = 0) {}
 
   // ドットを進めるメソッド
   advance() {
@@ -15,5 +15,9 @@ export class LRItem {
 
   getDotNextElement() {
     return this.concatenation.getElementAt(this.dotPosition);
+  }
+
+  getHash(): string {
+    return `${this.concatenation.getHash()}|${this.dotPosition}`;
   }
 }

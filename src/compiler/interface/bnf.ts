@@ -1,3 +1,5 @@
+import { encryptSha256 } from "../../helper/hash.js";
+
 export class BNFElement {
   private type: "terminal" | "nonterminal" | null;
   private value: string;
@@ -32,6 +34,11 @@ export class BNFElement {
   getValue() {
     return this.value;
   }
+
+  //typeとvalueをもとに、この要素のハッシュ値を生成する
+  getHash(): string {
+    return encryptSha256(`${this.type}|${this.value}|${this.wildcard}`);
+  }
 }
 
 export class BNFConcatenation {
@@ -41,6 +48,10 @@ export class BNFConcatenation {
   constructor(left: string) {
     this.left = left;
     this.elements = [];
+  }
+
+  getHash(): string {
+    return encryptSha256(`${this.left}|${this.elements.map((e) => e.getHash()).join(",")}`);
   }
 
   addElement(e: BNFElement) {

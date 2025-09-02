@@ -1,6 +1,6 @@
 import { LRItem } from "./lrItem";
 import { BNFSet, BNFConcatenation, BNFElement } from "./bnf";
-
+import { encryptSha256 } from "../../helper/hash.js";
 export class LRItemSet {
   //最終的なLRオートマトン集合の、ノードの状態を表す成果物
   private lrItems: LRItem[];
@@ -9,17 +9,24 @@ export class LRItemSet {
   private goto: Map<string, number>;
 
   // このclassにitemを渡す時点で、item.advance()を実行していること！展開の基準となります
-  constructor(private item: LRItem) {
+  constructor(private readonly item: LRItem) {
     this.lrItems = [];
     this.goto = new Map<string, number>();
     this.addItem(this.item);
+  }
+
+  //lrItemsをもとに、この集合の1つのハッシュ値を生成する
+  getHash(): string {
+    return encryptSha256(this.lrItems.map((item) => item.getHash()).join("|"));
   }
 
   /**
    * このアイテム集合内でのクロージャーの計算をする
    * このクラスの債務が肥大化しないよう、この中では再帰計算を行わない
    * そのため、次のノードに渡すべきdotを含んだLRItemを返却する。この過程では、Advanceを行っておく。
-   * @param item
+   * このメソッドは、そのItemSet単体で動作する
+   * @param item コアとなるLRItem
+   * @returns 次には制すべきLRItemの集合（keyは遷移すべき状態名）
    */
   closure(BNFSet: BNFSet): { [name: string]: LRItem } {
     const nextElement = this.item.getDotNextElement();
@@ -68,7 +75,7 @@ export class LRItemSet {
 export class LRItemSets {
   private itemSets: LRItemSet[];
 
-  constructor(private BNFSet: BNFSet) {
+  constructor(private readonly BNFSet: BNFSet) {
     this.itemSets = [];
   }
 
@@ -84,10 +91,14 @@ export class LRItemSets {
     }> = [];
 
     const currentItemSet = new LRItemSet(item);
+
     que.push({
       currentItemSetIndex: this.addItemSet(currentItemSet),
       currentItem: item,
     });
+
+    // nodehash hash:nodeindex
+    const nodeHash: Map<string, number> = new Map();
 
     while (que.length > 0) {
       const front = que.shift();
@@ -96,7 +107,7 @@ export class LRItemSets {
         continue;
       }
 
-      const { currentItemSetIndex, currentItem } = front;
+      const { currentItemSetIndex } = front;
       const nextItems = this.itemSets[currentItemSetIndex].closure(this.BNFSet);
 
       for (const [nextState, nItem] of Object.entries(nextItems)) {
