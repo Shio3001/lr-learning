@@ -21,6 +21,10 @@ export class LRItemSet {
     return encryptSha256(this.lrItems.map((item) => item.getHash()).join(","));
   }
 
+  getLRItems(): LRItem[] {
+    return this.lrItems;
+  }
+
   /**
    * このアイテム集合内でのクロージャーの計算をする
    * このクラスの債務が肥大化しないよう、この中ではアイテム集合をまたいだ再帰計算を行わない

@@ -20,4 +20,8 @@ export class LRItem {
   getHash(): string {
     return `${this.concatenation.getHash()}|${this.dotPosition}`;
   }
+
+  getConcatenation(): BNFConcatenation {
+    return this.concatenation;
+  }
 }
