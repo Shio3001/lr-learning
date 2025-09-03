@@ -21,23 +21,67 @@ import type { LRItemSet } from "../compiler/interface/itemSet";
 import type { LRItem } from "../compiler/interface/lrItem";
 import type { BNFElement } from "../compiler/interface/bnf";
 import { encryptSha256 } from "../helper/hash.js";
-import { BaseEdge, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from "@xyflow/react";
 
-function SelfLoopEdge({ id, sourceX, sourceY, targetX, targetY, markerEnd, style, interactionWidth }: EdgeProps) {
-  const r = 100; // 半径（data.radius を使うなら Number(data?.radius) ?? 26 に）
-  // 右から出て右上を回り、上へ戻る
-  const d = `M ${sourceX},${sourceY} C ${sourceX + r},${sourceY - r} ${targetX + r},${targetY - r} ${targetX},${targetY}`;
+// cubic Bézier の点を t で求める
+const bz = (t: number, p0: number, p1: number, p2: number, p3: number) => {
+  const u = 1 - t;
+  return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+};
+
+export function SelfLoopEdge({ id, sourceX, sourceY, targetX, targetY, label, style, interactionWidth, data }: EdgeProps) {
+  const r = Math.max(42, Number((data as any)?.radius) || 26);
+  const pad = 0; // ハンドルからのオフセット（必要なら 10〜14 くらいに）
+
+  // 同一点（top）→同一点
+  const sx = sourceX,
+    sy = sourceY - pad;
+  const ex = targetX,
+    ey = targetY - pad;
+
+  // 真上でふくらむ制御点（左右対称）
+  const c1x = sx + r,
+    c1y = sy - r * 2;
+  const c2x = ex - r,
+    c2y = ey - r * 2;
+
+  const d = `M ${sx},${sy} C ${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`;
+
+  // ラベルの座標：カーブ上の t（0.5 だと頂点付近）。少し上にオフセット
+  const t = 0.5;
+  const labelX = bz(t, sx, c1x, c2x, ex);
+  const labelY = bz(t, sy, c1y, c2y, ey) - 8;
 
   return (
-    <BaseEdge
-      id={id}
-      path={d}
-      markerEnd={markerEnd} // ← これで矢印が付く
-      style={style}
-      interactionWidth={interactionWidth ?? 24}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={d}
+        style={{ strokeLinecap: "round", ...(style || {}) }}
+        interactionWidth={interactionWidth ?? 24}
+        // ← 自己ループは矢印なしにしたいなら markerEnd は渡さない
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="nodrag nopan"
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: "none",
+            background: "white",
+            padding: "2px 4px",
+            borderRadius: 4,
+            fontSize: 12,
+            boxShadow: "0 0 0 1px rgba(0,0,0,0.05)",
+          }}
+        >
+          {label}
+        </div>
+      </EdgeLabelRenderer>
+    </>
   );
 }
+
 // ReactFlow に登録
 const edgeTypes = { selfLoop: SelfLoopEdge };
 
@@ -94,6 +138,9 @@ const elk = new ELK();
 
 // === 方向判定（4方向）===
 function pickHandles(a: { x: number; y: number }, b: { x: number; y: number }) {
+  // 同一だったらtop-top
+  if (a.x === b.x && a.y === b.y) return { sourceHandle: "top", targetHandle: "top" };
+
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return { sourceHandle: "top", targetHandle: "right" };
@@ -185,10 +232,9 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
     const loopCount = new Map<number, number>(); // nodeごとの自己ループ数
     lrItemSets.forEach((set, i) => {
       set.getGotos().forEach((targetIndex, symbol) => {
-        console.log("baseEdges", i, targetIndex, symbol);
         const to = Number(targetIndex);
         const isTerm = terminals.has(symbol);
-
+        console.log("baseEdges", i, to, targetIndex, symbol);
         if (to === i) {
           const k = (loopCount.get(i) ?? 0) + 1;
           loopCount.set(i, k);
@@ -199,10 +245,10 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
             target: idOf(to),
             label: symbol,
             type: "selfLoop", // ← ここがポイント
-            sourceHandle: "right", // ノード側に存在するhandleだけ使う
+            sourceHandle: "top", // ノード側に存在するhandleだけ使う
             targetHandle: "top",
             data: { radius: 26 + (k - 1) * 10 }, // 2本目以降は少し外側へ
-            markerEnd: { type: MarkerType.ArrowClosed },
+            // markerEnd: { type: MarkerType.ArrowClosed },
             style: {
               strokeWidth: 2.4,
               strokeDasharray: isTerm ? "0" : "6 4",
