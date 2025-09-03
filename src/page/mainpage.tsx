@@ -1,12 +1,15 @@
 import Textarea from "../atoms/textarea";
 import Button from "../atoms/button";
 
-import { getRawBNFWarningThrows, parseRawBnf } from "../compiler/parseBnf";
+import { getRawBNFWarningThrows, parseRawBnf, getTerminalSymbols } from "../compiler/parseBnf";
 import lr0 from "../compiler/lr0";
 import { BNFSet } from "../compiler/interface/bnf";
 
 import { useEffect, useState } from "react";
 import AutomatonGraph from "../component/automatonGraph";
+
+import { ReactFlowProvider } from "@xyflow/react";
+
 const MainPage = () => {
   // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
   const [bnf, setBnf] = useState<string>("S->LIST 'EoF'\nLIST->'LPAR' SEQ 'RPAR' | 'NUM'\nSEQ -> LIST\nSEQ -> SEQ 'COMMA' LIST");
@@ -31,10 +34,12 @@ const MainPage = () => {
         text="この構文定義で構築を開始する"
       />
       <div>
-        <AutomatonGraph
-          terminals={new Set(["LPAR", "RPAR", "NUM", "COMMA", "EoF"])}
-          lrItemSets={lr0(getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet())}
-        />
+        <ReactFlowProvider>
+          <AutomatonGraph
+            terminals={getTerminalSymbols(getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet())}
+            lrItemSets={lr0(getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet())}
+          />
+        </ReactFlowProvider>
       </div>
     </div>
   );

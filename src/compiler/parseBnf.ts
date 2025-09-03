@@ -108,6 +108,20 @@ export const parseRawBnf = (bnf: string): BNFSet => {
   return bnfSet;
 };
 
+export const getTerminalSymbols = (bnfSet: BNFSet): Set<string> => {
+  const terminals = new Set<string>();
+  bnfSet.getBNFs().forEach((bnf) => {
+    bnf.getRight().forEach((concat) => {
+      concat.getElements().forEach((elem) => {
+        if (elem.getType() === "terminal") {
+          terminals.add(elem.getValue());
+        }
+      });
+    });
+  });
+  return terminals;
+};
+
 // 名前のbnfを受け取って、構文にミス（存在しない非終端記号）などがあれば、行数を含む警告を投げる
 export const getRawBNFWarningThrows = (bhf: string): BNFError => {
   const warnings: BNFError = [];
