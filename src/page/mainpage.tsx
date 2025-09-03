@@ -26,13 +26,13 @@ const MainPage = () => {
           </p>
         ))}
       </div>
-      <Button
+      {/* <Button
         handler={() => {
           const pbnf = getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet();
           console.log(lr0(pbnf));
         }}
         text="この構文定義で構築を開始する"
-      />
+      /> */}
       <div>
         <ReactFlowProvider>
           <AutomatonGraph

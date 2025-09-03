@@ -279,6 +279,32 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
 
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+
+  // 2) marker をオブジェクトに絞る型ガード（enum単体だと spread できないので）
+  type EdgeMarkerObj = { type: any; width?: number; height?: number };
+  const isMarkerObj = (m: unknown): m is EdgeMarkerObj => !!m && typeof m === "object" && "type" in (m as any);
+
+  // 3) 「見た目だけ反映した」派生 edges を作る（setEdgesは呼ばない）
+  const vizEdges = useMemo(() => {
+    return edges.map((e) => {
+      const baseW = Number((e.data as any)?.baseW ?? e.style?.strokeWidth ?? 1.8);
+      const active = e.id === hoveredEdgeId;
+
+      const style = { ...(e.style ?? {}), strokeWidth: active ? baseW * 1.8 : baseW };
+
+      let markerEnd = e.markerEnd;
+      if (active && isMarkerObj(markerEnd)) {
+        markerEnd = {
+          ...markerEnd,
+          width: (markerEnd.width ?? 14) * 1.2,
+          height: (markerEnd.height ?? 14) * 1.2,
+        };
+      }
+      return { ...e, style, markerEnd };
+    });
+  }, [edges, hoveredEdgeId]);
+
   // ---- 自動レイアウト（ELK）
   const [layingOut, setLayingOut] = useState(false);
   const updateNodeInternals = useUpdateNodeInternals();
@@ -393,12 +419,14 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         nodes={nodes}
-        edges={edges}
+        edges={vizEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
+        onEdgeMouseEnter={(_, e) => setHoveredEdgeId(e.id)}
+        onEdgeMouseLeave={() => setHoveredEdgeId(null)}
       >
         <MiniMap
           pannable
