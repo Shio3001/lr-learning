@@ -6,9 +6,10 @@ import lr0 from "../compiler/lr0";
 import { BNFSet } from "../compiler/interface/bnf";
 
 import { useEffect, useState } from "react";
-import AutomatonGraph from "../component/automatonGraph";
+import AutomatonGraph from "../component/AutomatonGraph";
 
 import { ReactFlowProvider } from "@xyflow/react";
+import LRDrawAndCheck from "../component/LRDrawAndCheck";
 
 const MainPage = () => {
   // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
@@ -40,6 +41,9 @@ const MainPage = () => {
             lrItemSets={lr0(getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet())}
           />
         </ReactFlowProvider>
+      </div>
+      <div>
+        <LRDrawAndCheck lrItemSets={lr0(getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet())}></LRDrawAndCheck>
       </div>
     </div>
   );
