@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Handle,
   ReactFlow,
@@ -186,8 +186,13 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
   // ---- 自動レイアウト（ELK）
   const [layingOut, setLayingOut] = useState(false);
   const updateNodeInternals = useUpdateNodeInternals();
-
-  const runLayout = async () => {
+  // 先頭で
+  const latestKeyRef = useRef(graphKey);
+  useEffect(() => {
+    latestKeyRef.current = graphKey;
+  }, [graphKey]);
+  // 受け取る側（state を直接使わない）
+  const runLayout = async (keyAtStart: string, nodesSnap: Node[], edgesSnap: Edge[]) => {
     setLayingOut(true);
     try {
       const graph = {
@@ -199,20 +204,22 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
           "elk.spacing.nodeNode": "40",
           "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
         },
-        children: nodes.map((n) => ({ id: n.id, width: NODE_W, height: NODE_H })),
-        edges: edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+        children: nodesSnap.map((n) => ({ id: n.id, width: NODE_W, height: NODE_H })),
+        edges: edgesSnap.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
       } as const;
 
       const res = await elk.layout(graph);
 
-      const nextNodes = nodes.map((n) => {
+      // ★ 旧ジョブ破棄
+      if (latestKeyRef.current !== keyAtStart) return;
+
+      const nextNodes = nodesSnap.map((n) => {
         const g = res.children?.find((c) => c.id === n.id);
         return g ? { ...n, position: { x: g.x ?? 0, y: g.y ?? 0 } } : n;
       });
-      setNodes(nextNodes);
 
       const nodeMap = new Map(nextNodes.map((n) => [n.id, n]));
-      const routedEdges = edges.map((e) => {
+      const routedEdges = edgesSnap.map((e) => {
         const s = nodeMap.get(e.source);
         const t = nodeMap.get(e.target);
         if (!s || !t) return e;
@@ -221,85 +228,88 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
         const { sourceHandle, targetHandle } = pickHandles(a, b);
         return { ...e, sourceHandle, targetHandle };
       });
+
+      // ★ セットはここで一発
+      setNodes(nextNodes);
       setEdges(routedEdges);
     } catch (err) {
       console.error("ELK layout failed:", err);
     } finally {
-      setLayingOut(false);
+      if (latestKeyRef.current === keyAtStart) setLayingOut(false);
     }
   };
 
-  // 初回 & データ変化時に整列 + 内部再計測
+  // 呼ぶ側（useEffect & リレイアウトボタン）
   useEffect(() => {
-    setNodes(() => [...baseNodes]); // 新参照で完全置換
+    setNodes(() => [...baseNodes]);
     setEdges(() => [...baseEdges]);
     (async () => {
-      await runLayout();
-      // レイアウト後に各ノードを再計測
+      await runLayout(graphKey, baseNodes, baseEdges); // ★ スナップショットを渡す
       baseNodes.forEach((n) => updateNodeInternals(n.id));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphKey, baseNodes, baseEdges]);
 
+  // ボタンも同様に
+  <button onClick={() => runLayout(graphKey, baseNodes, baseEdges)}>Re-layout</button>;
+
   return (
-    <ReactFlowProvider>
-      <div style={{ width: "100%", height: "80vh", position: "relative" }}>
-        <div
+    <div style={{ width: "100%", height: "80vh", position: "relative" }}>
+      <div
+        style={{
+          position: "absolute",
+          zIndex: 10,
+          top: 8,
+          left: 8,
+          background: "white",
+          border: "1px solid #e5e7eb",
+          padding: "8px 10px",
+          borderRadius: 8,
+          fontSize: 12,
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontWeight: 700 }}>Legend</span>
+        <span>終端: 実線</span>
+        <span>非終端: 破線</span>
+        <span>受理: 緑枠</span>
+        <span>{layingOut ? "整列中…" : ""}</span>
+        <button
+          onClick={() => runLayout(graphKey, baseNodes, baseEdges)}
           style={{
-            position: "absolute",
-            zIndex: 10,
-            top: 8,
-            left: 8,
-            background: "white",
-            border: "1px solid #e5e7eb",
-            padding: "8px 10px",
-            borderRadius: 8,
-            fontSize: 12,
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
+            marginLeft: 8,
+            padding: "4px 8px",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            background: "#f9fafb",
+            cursor: "pointer",
           }}
         >
-          <span style={{ fontWeight: 700 }}>Legend</span>
-          <span>終端: 実線</span>
-          <span>非終端: 破線</span>
-          <span>受理: 緑枠</span>
-          <span>{layingOut ? "整列中…" : ""}</span>
-          <button
-            onClick={runLayout}
-            style={{
-              marginLeft: 8,
-              padding: "4px 8px",
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              background: "#f9fafb",
-              cursor: "pointer",
-            }}
-          >
-            Re-layout
-          </button>
-        </div>
-
-        <ReactFlow
-          nodeTypes={nodeTypes}
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          proOptions={{ hideAttribution: true }}
-        >
-          <MiniMap
-            pannable
-            zoomable
-            nodeColor={(n) => (String((n.data as any)?.title ?? "").includes("(✓)") ? "#a7f3d0" : "#e5e7eb")}
-            maskColor="rgba(0,0,0,0.08)"
-          />
-          <Controls showInteractive={false} />
-          <Background />
-        </ReactFlow>
+          Re-layout
+        </button>
       </div>
-    </ReactFlowProvider>
+
+      <ReactFlow
+        nodeTypes={nodeTypes}
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        proOptions={{ hideAttribution: true }}
+      >
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor={(n) => (String((n.data as any)?.title ?? "").includes("(✓)") ? "#a7f3d0" : "#e5e7eb")}
+          maskColor="rgba(0,0,0,0.08)"
+        />
+        <Controls showInteractive={false} />
+        <Background />
+      </ReactFlow>
+    </div>
   );
 }
