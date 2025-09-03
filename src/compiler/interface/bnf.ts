@@ -125,6 +125,10 @@ export class BNFSet {
     this.bnfs.push(b);
   }
 
+  insert(b: BNF, index: number) {
+    this.bnfs.splice(index, 0, b);
+  }
+
   getBNFbyLeft(left: string): BNFConcatenation[] {
     const result: BNFConcatenation[] = [];
     this.bnfs.forEach((bnf) => {
@@ -149,7 +153,7 @@ export class BNFSet {
     const newBNF = new BNF();
     newBNF.setLeft(sDash);
     newBNF.addRight(nbc);
-    this.addBNF(newBNF);
+    this.insert(newBNF, 0);
     return nbc;
   }
 }

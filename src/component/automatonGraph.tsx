@@ -21,15 +21,35 @@ import type { LRItemSet } from "../compiler/interface/itemSet";
 import type { LRItem } from "../compiler/interface/lrItem";
 import type { BNFElement } from "../compiler/interface/bnf";
 import { encryptSha256 } from "../helper/hash.js";
+import { BaseEdge, type EdgeProps } from "@xyflow/react";
+
+function SelfLoopEdge({ id, sourceX, sourceY, targetX, targetY, markerEnd, style, interactionWidth }: EdgeProps) {
+  const r = 100; // 半径（data.radius を使うなら Number(data?.radius) ?? 26 に）
+  // 右から出て右上を回り、上へ戻る
+  const d = `M ${sourceX},${sourceY} C ${sourceX + r},${sourceY - r} ${targetX + r},${targetY - r} ${targetX},${targetY}`;
+
+  return (
+    <BaseEdge
+      id={id}
+      path={d}
+      markerEnd={markerEnd} // ← これで矢印が付く
+      style={style}
+      interactionWidth={interactionWidth ?? 24}
+    />
+  );
+}
+// ReactFlow に登録
+const edgeTypes = { selfLoop: SelfLoopEdge };
+
+// JSX
 
 // ===== サイズ定数 =====
 const NODE_W = 300;
 const NODE_H = 160;
+const HANDLE_OUT = 18; // 好みで 8〜14px
 
 // ===== カスタムノード =====
 function LrStateNode({ data }: { data: { title: string; body: string; accepting: boolean; version: string } }) {
-  console.log("data.version", data.version, data.body);
-
   return (
     // ここで version を key にしてノードを必ず再マウント
     <div key={data.version} style={{ width: NODE_W, background: "transparent", border: "none" }}>
@@ -52,10 +72,14 @@ function LrStateNode({ data }: { data: { title: string; body: string; accepting:
         <div style={{ fontWeight: 700, marginBottom: 6 }}>{data.title}</div>
         <div>{data.body || "(no items)"}</div>
       </div>
-      <Handle type="source" id="right" position={Position.Right} />
+      <Handle type="source" id="right" position={Position.Right} style={{ right: -HANDLE_OUT }} />
+      <Handle type="target" id="right" position={Position.Right} style={{ right: -HANDLE_OUT }} />
+      <Handle type="source" id="left" position={Position.Left} />
       <Handle type="target" id="left" position={Position.Left} />
-      <Handle type="source" id="bottom" position={Position.Bottom} />
+      <Handle type="source" id="top" position={Position.Top} />
       <Handle type="target" id="top" position={Position.Top} />
+      <Handle type="source" id="bottom" position={Position.Bottom} />
+      <Handle type="target" id="bottom" position={Position.Bottom} />
     </div>
   );
 }
@@ -158,10 +182,36 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
 
   const baseEdges = useMemo<Edge[]>(() => {
     const edges: Edge[] = [];
+    const loopCount = new Map<number, number>(); // nodeごとの自己ループ数
     lrItemSets.forEach((set, i) => {
       set.getGotos().forEach((targetIndex, symbol) => {
+        console.log("baseEdges", i, targetIndex, symbol);
+        const to = Number(targetIndex);
         const isTerm = terminals.has(symbol);
-        const isEof = symbol === "EoF";
+
+        if (to === i) {
+          const k = (loopCount.get(i) ?? 0) + 1;
+          loopCount.set(i, k);
+
+          edges.push({
+            id: `e-${i}-${symbol}-${to}-${shortKey}`,
+            source: idOf(i),
+            target: idOf(to),
+            label: symbol,
+            type: "selfLoop", // ← ここがポイント
+            sourceHandle: "right", // ノード側に存在するhandleだけ使う
+            targetHandle: "top",
+            data: { radius: 26 + (k - 1) * 10 }, // 2本目以降は少し外側へ
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: {
+              strokeWidth: 2.4,
+              strokeDasharray: isTerm ? "0" : "6 4",
+            },
+            interactionWidth: 24,
+          });
+          return;
+        }
+
         edges.push({
           id: `e-${i}-${symbol}-${targetIndex}-${shortKey}`, // ★ edge も version を混ぜる
           source: idOf(i),
@@ -170,7 +220,7 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
           labelStyle: { fontSize: 12 },
           markerEnd: { type: MarkerType.ArrowClosed },
           style: {
-            strokeWidth: isEof ? 2.2 : 1.6,
+            strokeWidth: 2.2,
             strokeDasharray: isTerm ? "0" : "6 4",
           },
           animated: false,
@@ -222,13 +272,15 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
       const routedEdges = edgesSnap.map((e) => {
         const s = nodeMap.get(e.source);
         const t = nodeMap.get(e.target);
+
         if (!s || !t) return e;
+
         const a = { x: s.position.x + NODE_W / 2, y: s.position.y + NODE_H / 2 };
         const b = { x: t.position.x + NODE_W / 2, y: t.position.y + NODE_H / 2 };
         const { sourceHandle, targetHandle } = pickHandles(a, b);
+
         return { ...e, sourceHandle, targetHandle };
       });
-
       // ★ セットはここで一発
       setNodes(nextNodes);
       setEdges(routedEdges);
@@ -293,6 +345,7 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
 
       <ReactFlow
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}

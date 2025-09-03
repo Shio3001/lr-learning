@@ -126,9 +126,8 @@ export class LRItemSet {
       }
     }
 
-    console.log("クロージャ計算", this.initItems, rvItems);
+    // console.log("クロージャ計算", this.initItems, rvItems);
 
-    // 変換して渡す
     return rvItems;
   }
 
@@ -165,6 +164,7 @@ export class LRItemSets {
 
   startCalculation() {
     this.calcClosure(new LRItem(this.BNFSet.getStartSymbol()));
+    console.log("LR(0)のアイテム集合", this.itemSets);
     return this.itemSets;
   }
 
