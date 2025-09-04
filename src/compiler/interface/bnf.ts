@@ -56,10 +56,16 @@ export class BNFElement {
 export class BNFConcatenation {
   private left: string;
   private elements: BNFElement[];
+  private name = ""; // この連結の名前 ( 1-1のような形 1は行数目、 Aは左から何個目か )
 
-  constructor(left: string) {
+  constructor(left: string, name: string = "") {
     this.left = left;
     this.elements = [];
+    this.name = name;
+  }
+
+  getName() {
+    return this.name;
   }
 
   getHash(): string {
@@ -88,6 +94,10 @@ export class BNFConcatenation {
 
   getLeftRight() {
     return { left: this.left, right: this.elements };
+  }
+
+  getAsString(): string {
+    return `${this.left} -> ${this.elements.map((e) => (e.getType() === "terminal" ? `'${e.getValue()}'` : e.getValue())).join(" ")}`;
   }
 }
 
@@ -175,6 +185,31 @@ export class BNFSet {
     newBNF.addRight(nbc);
     this.insert(newBNF, 0);
     return nbc;
+  }
+
+  getAllElements(): BNFElement[] {
+    const elements: BNFElement[] = [];
+    this.bnfs.forEach((bnf) => {
+      bnf.getRight().forEach((concat) => {
+        concat.getElements().forEach((elem) => {
+          // 重複を避ける
+          if (!elements.some((e) => e.getHash() === elem.getHash())) {
+            elements.push(elem);
+          }
+        });
+      });
+    });
+    return elements;
+  }
+
+  getAllTerminals(): string[] {
+    const terminals: Set<string> = new Set();
+    this.getAllElements().forEach((elem) => {
+      if (elem.isTerminal()) {
+        terminals.add(elem.getValue());
+      }
+    });
+    return Array.from(terminals);
   }
 }
 

@@ -49,12 +49,14 @@ export const parseRawBnf = (bnf: string): BNFSet => {
     bnf.setLine(index);
 
     const rightParts = right.split("|").map((part) => part.trim());
-    rightParts.forEach((part) => {
+    rightParts.forEach((part, partIndex) => {
       if (part.includes("ε") && part.trim() !== "ε") {
         throw new Error(`${index}\n右辺にεを含める場合は単独で使ってください: ` + part);
       }
 
-      const concatenation = new BNFConcatenation(left);
+      const name = `${index}-${partIndex}`; // 1-1のような形 1は行数目、 Aは左から何個目か
+
+      const concatenation = new BNFConcatenation(left, name);
 
       // ワイルドカードの処理
       // 例: A* -> A, A+ -> A, A? -> A

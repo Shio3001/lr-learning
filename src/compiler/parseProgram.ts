@@ -38,12 +38,12 @@ export const parseProgram = (
     }
 
     if (action.type === "shift") {
-      // シ   フトアクション
+      // シフトアクション
       stack.push(action.toState);
       symbolStack.push({ symbol: currentToken.type, children: [] });
       logs.push({
         tree: { symbol: "ROOT", children: [...symbolStack] },
-        state: action.toState,
+        state: currentState,
         token: currentToken.type,
       });
       index++;
@@ -63,15 +63,16 @@ export const parseProgram = (
       const newNode: ParseTreeNode = { symbol: action.by.getLeft(), children };
       symbolStack.push(newNode);
 
-      const gotoState = table[stack[stack.length - 1]].gotos[action.by.getLeft()];
+      const currentState = stack[stack.length - 1];
+      const gotoState = table[currentState].gotos[action.by.getLeft()];
       if (gotoState === undefined) {
-        throw new Error(`状態${stack[stack.length - 1]}で非終端記号'${action.by.getLeft()}'に対する遷移が存在しません。`);
+        throw new Error(`状態${currentState}で非終端記号'${action.by.getLeft()}'に対する遷移が存在しません。`);
       }
       stack.push(gotoState);
       logs.push({
         tree: { symbol: "ROOT", children: [...symbolStack] },
-        state: gotoState,
-        token: currentToken.type,
+        state: currentState,
+        token: action.by.getLeft(),
       });
     } else if (action.type === "accept") {
       // アクセプトアクション
@@ -87,8 +88,19 @@ export const parseProgram = (
   }
 
   if (symbolStack.length !== 1) {
-    throw new Error("構文解析木のルートノードが一つではありません。");
+    console.warn("構文解析木のルートノードが一つではありません。", symbolStack);
+    // 新たにルートノードを作成
+    const rootNode: ParseTreeNode = { symbol: "ROOT", children: [...symbolStack] };
+
+    //ParseLogならばlogs[logs.length - 1] = { tree: rootNode, state: logs[logs.length - 1].state, token: logs[logs.length - 1].token };、stringならそのままにする
+    if (logs.length > 0 && typeof logs[logs.length - 1] !== "string") {
+      const lastLog = logs[logs.length - 1] as ParseLog;
+      logs[logs.length - 1] = { tree: rootNode, state: lastLog.state, token: lastLog.token };
+    }
+    return { log: logs };
   }
+
+  console.log("構文解析成功", logs);
 
   return { log: logs };
 };

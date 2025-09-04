@@ -47,6 +47,7 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
         const left = item.getConcatenation().getLeft();
         if (left === startSymbol) {
           // 開始記号ならアクセプト
+          console.log(`状態${stateIndex}でアクセプトアクションを設定`);
           row.actions["$"] = { type: "accept" }; // $は入力の終端を表す特別な記号
         } else {
           // それ以外はリダクション
@@ -54,7 +55,22 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
           if (row.actions["$"] && row.actions["$"].type !== "accept") {
             throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
           }
-          row.actions["$"] = { type: "reduce", by: item.getConcatenation() }; // ここでは簡略化のため、すべての入力に対してリダクションを行う
+
+          /**
+           * アイテム集合 i が A → w • という形式のアイテムを含み、対応する文法規則 A → w の番号 m が m > 0 なら、状態 i に対応するアクション表の行には全て reduce アクション rm を書き込む。
+           */
+          bnfSet.getAllTerminals().forEach((terminal) => {
+            if (row.actions[terminal] && row.actions[terminal].type !== "accept") {
+              throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
+            }
+            row.actions[terminal] = { type: "reduce", by: item.getConcatenation() };
+          });
+
+          // S->. なら $ にもリダクションを追加
+          if (!row.actions["$"]) {
+            row.actions["$"] = { type: "reduce", by: item.getConcatenation() };
+          }
+          console.log(`状態${stateIndex}でリダクションアクションを設定: ${left} -> ${item.getConcatenation().getRight().join(" ")}`);
         }
       }
     });

@@ -15,6 +15,7 @@ import { TransitionTable } from "../compiler/interface/transitionTable";
 import LRTable from "../component/LRTable";
 import { parseProgram } from "../compiler/parseProgram";
 import { Token, lex } from "./../compiler/tsLexerLib";
+import TreeView from "../component/TreeView";
 
 const MainPage = () => {
   // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
@@ -74,14 +75,34 @@ const MainPage = () => {
     return (
       <div>
         <h2>構文解析木</h2>
-        {trees.map((log, index) => (
-          <div key={index} style={{ border: "1px solid black", marginBottom: "10px", padding: "10px" }}>
-            <p>
-              <strong>ステップ {index + 1}:</strong> 状態 {log.state} にてトークン '{log.token}' を処理
-            </p>
-            <LRTable table={table} lightUpState={log.state} lightUpToken={log.token}></LRTable>
-          </div>
-        ))}
+        {trees.map((log, index) =>
+          (() => {
+            if (typeof log === "string") {
+              return (
+                // エラーが文字列で返ってきた場合
+                <div key={index}>
+                  <p style={{ color: "red" }}>{log}</p>
+                </div>
+              );
+            }
+
+            return (
+              <div key={index} style={{ border: "1px solid black", marginBottom: "10px", padding: "10px" }}>
+                <p>
+                  <strong>ステップ {index + 1}:</strong> 状態 {log.state} にてトークン '{log.token}' を処理
+                </p>
+                <LRTable table={table} lightUpState={log.state} lightUpToken={log.token}></LRTable>
+                <div
+                  style={{
+                    width: "25%",
+                  }}
+                >
+                  <TreeView root={log.tree} />
+                </div>
+              </div>
+            );
+          })()
+        )}
       </div>
     );
   };

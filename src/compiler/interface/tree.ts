@@ -9,4 +9,4 @@ export type ParseLog = {
   state: number;
   token: string;
 };
-export type ParseLogs = Array<ParseLog>;
+export type ParseLogs = Array<ParseLog | string>;

@@ -16,17 +16,32 @@ type LRTableProps = {
 };
 
 const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) => {
+  const getActionKeys = () => {
+    const actionSet = new Set<string>();
+    table.forEach((row) => {
+      Object.keys(row.actions).forEach((action) => actionSet.add(action));
+    });
+    return Array.from(actionSet);
+  };
+  const getGotosKeys = () => {
+    const gotoSet = new Set<string>();
+    table.forEach((row) => {
+      Object.keys(row.gotos).forEach((goto) => gotoSet.add(goto));
+    });
+    return Array.from(gotoSet);
+  };
+
   return (
     <table border={1} style={{ borderCollapse: "collapse", marginTop: "20px" }}>
       <thead>
         <tr>
           <th>State</th>
-          <th colSpan={Object.keys(table[0]?.actions || {}).length}>Actions</th>
-          <th colSpan={Object.keys(table[0]?.gotos || {}).length}>Gotos</th>
+          <th colSpan={getActionKeys().length}>Actions</th>
+          <th colSpan={getGotosKeys().length}>Gotos</th>
         </tr>
         <tr>
           <th></th>
-          {Object.keys(table[0]?.actions || {}).map((terminal) => (
+          {getActionKeys().map((terminal) => (
             <th
               style={{
                 paddingLeft: "5px",
@@ -37,7 +52,7 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
               {terminal}
             </th>
           ))}
-          {Object.keys(table[0]?.gotos || {}).map((nonTerminal) => (
+          {getGotosKeys().map((nonTerminal) => (
             <th
               style={{
                 paddingLeft: "5px",
@@ -54,7 +69,7 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
         {table.map((row) => (
           <tr key={`row-${row.state}`}>
             <td>{row.state}</td>
-            {Object.keys(table[0]?.actions || {}).map((terminal) => (
+            {getActionKeys().map((terminal) => (
               <td
                 key={`action-${row.state}-${terminal}`}
                 style={{
@@ -65,12 +80,13 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
                   ? row.actions[terminal].type === "shift"
                     ? `S${row.actions[terminal].toState}`
                     : row.actions[terminal].type === "reduce"
-                    ? `R(${row.actions[terminal].by.getLeft()}->${row.actions[terminal].by.getRight().join(" ")})`
+                    ? // ? `R(${row.actions[terminal].by.getLeft()}->${row.actions[terminal].by.getRight().join(" ")})`
+                      `R(${row.actions[terminal].by.getAsString()})`
                     : "ACC"
                   : ""}
               </td>
             ))}
-            {Object.keys(table[0]?.gotos || {}).map((nonTerminal) => (
+            {getGotosKeys().map((nonTerminal) => (
               <td
                 style={{
                   backgroundColor: lightUpState === row.state && lightUpToken === nonTerminal ? "yellow" : "transparent",
