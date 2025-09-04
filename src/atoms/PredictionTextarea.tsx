@@ -3,16 +3,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 export type TextareaProps = {
   handler?: (t: string) => void;
   text?: string;
-  /** 予測に使う語彙 */
+  /** 予測に使う語彙（かつ区切り候補としても使う） */
   candidates?: string[];
-  /** 単語区切りの判定（デフォ: 空白系） */
+  /** 基本の区切り（空白・句読点など） */
   wordDelimiter?: RegExp;
-  /** 前方一致 or 部分一致 */
+  /** 前方一致 or 部分一致（候補フィルタ用） */
   matchMode?: "prefix" | "substring";
-  /** 大文字小文字を区別するか */
+  /** 大文字小文字の区別（候補フィルタ＆候補区切りの両方に適用） */
   caseSensitive?: boolean;
   /** 表示する最大候補数 */
   maxSuggestions?: number;
+  /** 候補単語を区切りとして使うか（デフォルト: true） */
+  candidateAsDelimiter?: boolean;
 };
 
 const defaultDelimiter = /[\s\t\n\r.,;:(){}[\]"'`!?]+/;
@@ -59,22 +61,9 @@ function normalize(s: string, caseSensitive: boolean) {
   return caseSensitive ? s : s.toLowerCase();
 }
 
-function pickWordRange(text: string, caret: number, delimiter: RegExp): { start: number; end: number; word: string } {
-  const len = text.length;
-  let s = caret - 1;
-  while (s >= 0 && !delimiter.test(text[s])) s--;
-  let e = caret;
-  while (e < len && !delimiter.test(text[e])) e++;
-  const start = Math.max(0, s + 1);
-  const end = e;
-  const word = text.slice(start, end);
-  return { start, end, word };
-}
-
 function filterAndRank(rawWord: string, dict: string[], { caseSensitive, mode }: { caseSensitive: boolean; mode: "prefix" | "substring" }): string[] {
   const w = normalize(rawWord, caseSensitive);
   if (!w) return [];
-
   const n = (s: string) => normalize(s, caseSensitive);
 
   const prefix: string[] = [];
@@ -89,12 +78,69 @@ function filterAndRank(rawWord: string, dict: string[], { caseSensitive, mode }:
       else if (nc.includes(w)) partial.push(cand);
     }
   }
-
-  // 簡易スコア: 前方一致を先に、長さが短いもの優先
   prefix.sort((a, b) => a.length - b.length);
   partial.sort((a, b) => a.length - b.length);
-
   return [...prefix, ...partial];
+}
+
+/** 候補語も“区切り”に含めたグローバル正規表現を生成 */
+function buildBoundaryRegex(base: RegExp, candidates: string[], caseSensitive: boolean, candidateAsDelimiter: boolean): RegExp {
+  const baseSrc = base.source;
+  const baseFlags = base.flags.includes("g") ? base.flags : base.flags + "g";
+
+  if (!candidateAsDelimiter || candidates.length === 0) {
+    // base だけ。ただし g フラグを必ず付ける
+    const flags = caseSensitive ? baseFlags.replace(/i/g, "") : baseFlags.includes("i") ? baseFlags : baseFlags + "i";
+    return new RegExp(baseSrc, flags);
+  }
+
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // 長い候補から並べることで最長一致寄りの挙動を多少担保
+  const pattern = candidates
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .map(esc)
+    .join("|");
+
+  // base か 候補語 のいずれかにマッチ
+  // 例: /(?:[\s.,]+)|(?:function|return|record)/gi
+  let flags = "g";
+  if (!caseSensitive) flags += "i";
+  return new RegExp(`(?:${baseSrc})|(?:${pattern})`, flags);
+}
+
+/** “区切り”のマッチ位置列から、caret を含む単語範囲を計算 */
+function pickWordRangeByRegex(text: string, caret: number, boundary: RegExp): { start: number; end: number; word: string } {
+  // 全マッチを集める（区切りは [start, end)）
+  boundary.lastIndex = 0;
+  const seps: Array<{ s: number; e: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = boundary.exec(text)) !== null) {
+    const s = m.index;
+    const e = s + m[0].length;
+    // 安全装置: 無限ループ回避（0幅は想定しないが念のため）
+    if (e === s) {
+      boundary.lastIndex = e + 1;
+    }
+    seps.push({ s, e });
+  }
+
+  // caret の直前で終わる最終区切りと、caret 以降で始まる最初の区切りを探す
+  let prevEnd = 0;
+  let nextStart = text.length;
+
+  for (let i = 0; i < seps.length; i++) {
+    const { s, e } = seps[i];
+    if (e <= caret) prevEnd = Math.max(prevEnd, e);
+    if (s >= caret) {
+      nextStart = s;
+      break;
+    }
+  }
+  const start = prevEnd;
+  const end = nextStart;
+  const word = text.slice(start, end);
+  return { start, end, word };
 }
 
 const Textarea = ({
@@ -105,6 +151,7 @@ const Textarea = ({
   matchMode = "prefix",
   caseSensitive = false,
   maxSuggestions = 10,
+  candidateAsDelimiter = true,
 }: TextareaProps) => {
   const [value, setValue] = useState(text ?? "");
   const [open, setOpen] = useState(false);
@@ -119,7 +166,13 @@ const Textarea = ({
     }
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { start, end, word } = useMemo(() => pickWordRange(value, caret, wordDelimiter), [value, caret, wordDelimiter]);
+  // 候補も含めた“区切り”正規表現
+  const boundaryRegex = useMemo(
+    () => buildBoundaryRegex(wordDelimiter, candidates, caseSensitive, candidateAsDelimiter),
+    [wordDelimiter, candidates, caseSensitive, candidateAsDelimiter]
+  );
+
+  const { start, end, word } = useMemo(() => pickWordRangeByRegex(value, caret, boundaryRegex), [value, caret, boundaryRegex]);
 
   const suggestions = useMemo(() => {
     if (!candidates?.length) return [];
@@ -140,9 +193,7 @@ const Textarea = ({
       const nextCaret = start + chosen.length;
       setValue(next);
       setOpen(false);
-      // 反映
       handler?.(next);
-      // caretを戻す
       requestAnimationFrame(() => {
         const el = taRef.current;
         if (!el) return;
@@ -190,7 +241,6 @@ const Textarea = ({
   const onSelect = () => {
     const el = taRef.current;
     if (!el) return;
-    // selectionStart はカーソル位置（または選択開始位置）
     setCaret(el.selectionStart ?? 0);
   };
 
@@ -217,8 +267,7 @@ const Textarea = ({
               style={styles.item(i === activeIdx)}
               onMouseEnter={() => setActiveIdx(i)}
               onMouseDown={(e) => {
-                // textareaのフォーカスが外れる前に確定する
-                e.preventDefault();
+                e.preventDefault(); // blur前に確定
                 onClickItem(i);
               }}
               role="option"

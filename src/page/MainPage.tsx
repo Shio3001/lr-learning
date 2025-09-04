@@ -2,7 +2,7 @@ import Textarea from "../atoms/Textarea";
 import PredictionTextarea from "../atoms/PredictionTextarea";
 import Button from "../atoms/Button";
 
-import { getRawBNFWarningThrows, parseRawBnf, getTerminalSymbols } from "../compiler/parseBnf";
+import { getRawBNFWarningThrows, parseRawBnf, getTerminalSymbols, getLeftSymbols } from "../compiler/parseBnf";
 import lr0 from "../compiler/lr0";
 import { BNFSet } from "../compiler/interface/bnf";
 
@@ -39,6 +39,10 @@ const MainPage = () => {
 
   const getTerminal = () => {
     return getTerminalSymbols(getBNFset());
+  };
+
+  const getLeft = () => {
+    return getLeftSymbols(bnf);
   };
 
   const getLRItemSets = () => {
@@ -127,10 +131,10 @@ const MainPage = () => {
           //lex(program)の 結果を取得し、kindの重複を除いた配列を作成
           const tokens = lex(program);
           const kinds = Array.from(new Set(tokens.map((t) => t.kind)));
-          return [...kinds, "->"];
+          return [...kinds, "->", ...getLeft(), "|"];
         })()}
       />
-      <p>ε : 空集合記号（コピーして使ってください）</p>
+      {/* <p>ε : 空集合記号（コピーして使ってください）</p> */}
       <div>
         {/* エラーをそれぞれpタグで囲って表示 */}
         {getRawBNFWarningThrows(bnf).map((e, i) => (
@@ -145,7 +149,7 @@ const MainPage = () => {
         </ReactFlowProvider>
       </div>
       <LRTable table={table} lightUpState={null} lightUpToken={null}></LRTable>
-      <h2>構文解析したいプログラムを入力してください</h2>
+      <h2>構文解析したいプログラムを入力してください（TypeScript処理系準拠）</h2>
       <Textarea text={program} handler={setProgram} />
       <p>
         {

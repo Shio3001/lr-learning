@@ -110,6 +110,51 @@ export const parseRawBnf = (bnf: string): BNFSet => {
   return bnfSet;
 };
 
+// かなり強引に左辺のシンボルを取得する
+export const getLeftSymbols = (bnf: string): Set<string> => {
+  const lefts = new Set<string>();
+  //parseRawBnfを使うと正常時にしか動かないので、正常時のみ使い、 だめだったら 正規表現で強引に取得する
+  // ただし、try-catchは重いので、あまり多用しないこと
+  // なので、getRawBNFWarningThrowsの行数を利用して、警告がある場合は正規表現で強引に取得する
+  const warnings = getRawBNFWarningThrows(bnf);
+  if (warnings.length > 0) {
+    // 警告がある場合は正規表現で強引に取得
+    const lines = bnf.split("\n").map((line) => line.trim());
+    lines.forEach((line) => {
+      if (line === "") return; // 空行は無視
+      const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*->/);
+      if (match) {
+        lefts.add(match[1]);
+      }
+    });
+    return lefts;
+  }
+
+  // 警告がない場合はparseRawBnfを使う
+  const bnfSet = parseRawBnf(bnf);
+  bnfSet.getBNFs().forEach((bnf) => {
+    lefts.add(bnf.getLeft());
+  });
+  return lefts;
+  //   const bnfSet = parseRawBnf(bnf);
+  //   bnfSet.getBNFs().forEach((bnf) => {
+  //     lefts.add(bnf.getLeft());
+  //   });
+  //   return lefts;
+  // } catch (e) {
+  //   // 正規表現で強引に取得
+  //   const lines = bnf.split("\n").map((line) => line.trim());
+  //   lines.forEach((line) => {
+  //     if (line === "") return; // 空行は無視
+  //     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*->/);
+  //     if (match) {
+  //       lefts.add(match[1]);
+  //     }
+  //   });
+  //   return lefts;
+  // }
+};
+
 export const getTerminalSymbols = (bnfSet: BNFSet): Set<string> => {
   const terminals = new Set<string>();
   bnfSet.getBNFs().forEach((bnf) => {
