@@ -1,5 +1,6 @@
-import Textarea from "../atoms/textarea";
-import Button from "../atoms/button";
+import Textarea from "../atoms/Textarea";
+import PredictionTextarea from "../atoms/PredictionTextarea";
+import Button from "../atoms/Button";
 
 import { getRawBNFWarningThrows, parseRawBnf, getTerminalSymbols } from "../compiler/parseBnf";
 import lr0 from "../compiler/lr0";
@@ -119,7 +120,16 @@ const MainPage = () => {
   return (
     <div>
       <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>
-      <Textarea text={bnf} handler={setBnf} />
+      <PredictionTextarea
+        text={bnf}
+        handler={setBnf}
+        candidates={(() => {
+          //lex(program)の 結果を取得し、kindの重複を除いた配列を作成
+          const tokens = lex(program);
+          const kinds = Array.from(new Set(tokens.map((t) => t.kind)));
+          return [...kinds, "->"];
+        })()}
+      />
       <p>ε : 空集合記号（コピーして使ってください）</p>
       <div>
         {/* エラーをそれぞれpタグで囲って表示 */}
@@ -129,13 +139,6 @@ const MainPage = () => {
           </p>
         ))}
       </div>
-      {/* <Button
-        handler={() => {
-          const pbnf = getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet();
-          console.log(lr0(pbnf));
-        }}
-        text="この構文定義で構築を開始する"
-      /> */}
       <div>
         <ReactFlowProvider>
           <AutomatonGraph terminals={getTerminal()} lrItemSets={getLRItemSets()} />
