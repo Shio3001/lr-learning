@@ -65,12 +65,12 @@ export const bootRules: Rule[] = [
 
 // --- リンター用ストア & リデューサ
 export type LinterStore = {
-  reservedWords: string[];
+  //   reservedWords: string[];
   ruleList: Rule[];
 };
 
 type LinterAction =
-  | { type: "LINT_RESERVED_SET"; payload: string[] }
+  //   | { type: "LINT_RESERVED_SET"; payload: string[] }
   | { type: "LINT_RESERVED_ADD"; payload: string }
   | { type: "LINT_RULE_UPSERT"; payload: Rule }
   | { type: "LINT_RULE_TOGGLE"; id: string; enabled: boolean }
@@ -78,13 +78,13 @@ type LinterAction =
 
 export function linterReducer(store: LinterStore, action: LinterAction): LinterStore {
   switch (action.type) {
-    case "LINT_RESERVED_SET": {
-      return { ...store, reservedWords: Array.from(new Set(action.payload)) };
-    }
+    // case "LINT_RESERVED_SET": {
+    //   return { ...store, reservedWords: Array.from(new Set(action.payload)) };
+    // }
     case "LINT_RESERVED_ADD": {
       return {
         ...store,
-        reservedWords: Array.from(new Set([...store.reservedWords, action.payload])),
+        // reservedWords: Array.from(new Set([...store.reservedWords, action.payload])),
       };
     }
     case "LINT_RULE_UPSERT": {

@@ -59,6 +59,16 @@ function posToLineCol(pos: number, lineStarts: number[]) {
   }
   return { line: 1, column: pos + 1 };
 }
+export const getTsSyntaxKindList = (): string[] => {
+  const kinds: string[] = [];
+  for (const name in ts.SyntaxKind) {
+    const val = (ts.SyntaxKind as any)[name];
+    if (typeof val === "number") {
+      kinds[val] = name;
+    }
+  }
+  return kinds;
+};
 
 function categorize(kind: ts.SyntaxKind): TokenCategory {
   if (kind >= ts.SyntaxKind.FirstKeyword && kind <= ts.SyntaxKind.LastKeyword) return "keyword";

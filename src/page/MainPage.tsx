@@ -15,7 +15,7 @@ import { makeTransitionTable } from "../compiler/makeTable";
 import { TransitionTable } from "../compiler/interface/transitionTable";
 import LRTable from "../component/LRTable";
 import { parseProgram } from "../compiler/parseProgram";
-import { Token, lex } from "./../compiler/tsLexerLib";
+import { Token, lex, getTsSyntaxKindList } from "./../compiler/tsLexerLib";
 import TreeView from "../component/TreeView";
 import LinterExercise from "../component/LinterExercise";
 import { ParseTreeNode, ParseLog } from "../compiler/interface/tree";
@@ -40,28 +40,39 @@ const MainPage = () => {
 
   useEffect(() => {
     const tokens = lex(program);
+    // const tsKinds = getTsSyntaxKindList();
+    // const uniqueKinds = Array.from(new Set(tokens.map((t: Token) => t.kind).concat(tsKinds)));
+
     const uniqueKinds = Array.from(new Set(tokens.map((t: Token) => t.kind)));
     setKinds(uniqueKinds);
   }, [program]);
 
-  const getReservedWords = () => {
-    return [...kinds, "->", ...getLeft(), "|"];
+  const handlerAllKinds = () => {
+    return Array.from(new Set([...kinds, ...getTsSyntaxKindList()]));
   };
 
-  const getBNFset = () => {
-    return getRawBNFWarningThrows(bnf, kinds).length === 0 ? parseRawBnf(bnf, kinds) : new BNFSet();
+  const handlerReservedWords = () => {
+    return [...kinds, "->", ...handlerLeft(), "|"];
   };
 
-  const getTerminal = () => {
-    return getTerminalSymbols(getBNFset());
+  const handlerRawBNFWarning = () => {
+    return getRawBNFWarningThrows(bnf, handlerAllKinds());
   };
 
-  const getLeft = () => {
+  const handlerBNFset = () => {
+    return handlerRawBNFWarning().length === 0 ? parseRawBnf(bnf, handlerAllKinds()) : new BNFSet();
+  };
+
+  const handlerTerminal = () => {
+    return getTerminalSymbols(handlerBNFset());
+  };
+
+  const handlerLeft = () => {
     return getLeftSymbols(bnf, kinds);
   };
 
-  const getLRItemSets = () => {
-    return lr0(getBNFset());
+  const handlerLRItemSets = () => {
+    return lr0(handlerBNFset());
   };
 
   const getTrees = () => {
@@ -129,7 +140,7 @@ const MainPage = () => {
 
   useEffect(() => {
     try {
-      const newTable: TransitionTable = makeTransitionTable(getLRItemSets(), getBNFset());
+      const newTable: TransitionTable = makeTransitionTable(handlerLRItemSets(), handlerBNFset());
       setTable({ type: "SET_TABLE", payload: newTable });
     } catch (e) {
       setTable({ type: "SET_TABLE", payload: [] });
@@ -137,7 +148,7 @@ const MainPage = () => {
   }, [bnf]);
 
   const [linterStore, sendLinter] = useReducer(linterReducer, {
-    reservedWords: [...getReservedWords().filter((k) => k !== "S" && k.length > 1), "ROOT"],
+    // reservedWords: [...kinds, "ROOT"],
     ruleList: bootRules,
   });
 
@@ -150,15 +161,23 @@ const MainPage = () => {
         candidates={(() => {
           //lex(program)の 結果を取得し、kindの重複を除いた配列を作成
           // ただし、1文字のものは除外する
-          return getReservedWords().filter((k) => k !== "S" && k.length > 1);
+          return handlerReservedWords().filter((k) => k !== "S" && k.length > 1);
         })()}
       />
       <h3>現在の構文解析予約語一覧</h3>
-      <p>{getReservedWords().join(" ")}</p>
+      <p>{handlerReservedWords().join(" ")}</p>
+      <h4>上記に加えて、以下のワードも終端記号として認識されます。</h4>
+      <p
+        style={{
+          fontSize: 10,
+        }}
+      >
+        {getTsSyntaxKindList().join(" ")}
+      </p>
       {/* <p>ε : 空集合記号（コピーして使ってください）</p> */}
       <div>
         {/* エラーをそれぞれpタグで囲って表示 */}
-        {getRawBNFWarningThrows(bnf, kinds).map((e, i) => (
+        {handlerRawBNFWarning().map((e, i) => (
           <p key={i} style={{ color: e.isError ? "red" : "orange" }}>
             (行: {e.line}) {e.error}
           </p>
@@ -166,7 +185,7 @@ const MainPage = () => {
       </div>
       <div>
         <ReactFlowProvider>
-          <AutomatonGraph terminals={getTerminal()} lrItemSets={getLRItemSets()} />
+          <AutomatonGraph terminals={handlerTerminal()} lrItemSets={handlerLRItemSets()} />
         </ReactFlowProvider>
       </div>
       <LRTable table={table} lightUpState={null} lightUpToken={null}></LRTable>
@@ -187,7 +206,7 @@ const MainPage = () => {
         onToggleRule={(id, enabled) => sendLinter({ type: "LINT_RULE_TOGGLE", id, enabled })}
         onRemoveRule={(id) => sendLinter({ type: "LINT_RULE_REMOVE", id })}
         rules={linterStore.ruleList}
-        symbolCandidates={kinds}
+        symbolCandidates={["ROOT", ...kinds]}
         tree={((): ParseTreeNode => {
           // getTrees()の最後の要素を取得する。ただし、stringの場合はその前のstring以外になるまで遡る
           const trees = getTrees();
