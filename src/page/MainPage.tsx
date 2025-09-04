@@ -14,6 +14,7 @@ import LRDrawAndCheck from "../component/LRDrawAndCheck";
 const MainPage = () => {
   // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
   const [bnf, setBnf] = useState<string>("S->LIST 'EoF'\nLIST->'LPAR' SEQ 'RPAR' | 'NUM'\nSEQ -> LIST\nSEQ -> SEQ 'COMMA' LIST");
+  const [program, setProgram] = useState<string>("");
   return (
     <div>
       <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>
@@ -42,9 +43,14 @@ const MainPage = () => {
           />
         </ReactFlowProvider>
       </div>
-      <div>
+
+      <h2>構文解析したいプログラムを入力してください</h2>
+      <Textarea text={program} handler={setProgram} />
+
+      <></>
+      {/* <div>
         <LRDrawAndCheck lrItemSets={lr0(getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet())}></LRDrawAndCheck>
-      </div>
+      </div> */}
     </div>
   );
 };
