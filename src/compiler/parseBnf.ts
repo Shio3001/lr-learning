@@ -30,7 +30,7 @@ throwしたり、表現するエラーはすべて日本語で
  *   "E": [["'e'", "+"]],
  * }
  * */
-export const parseRawBnf = (bnf: string): BNFSet => {
+export const parseRawBnf = (bnf: string, kinds: Array<string>): BNFSet => {
   const lines = bnf.split("\n").map((line) => line.trim());
   const bnfSet = new BNFSet();
 
@@ -74,8 +74,11 @@ export const parseRawBnf = (bnf: string): BNFSet => {
           element.setType("terminal");
           element.setValue(""); // εは空集合を表す
         }
-
-        if (sym.startsWith("'") && sym.endsWith("'")) {
+        // kindsに含まれている場合は予約語として扱う
+        else if (kinds.includes(sym)) {
+          element.setType("terminal");
+          element.setValue(sym);
+        } else if (sym.startsWith("'") && sym.endsWith("'")) {
           // 終端記号
           element.setType("terminal");
           element.setValue(sym.slice(1, -1)); // 'a' -> a
@@ -111,12 +114,12 @@ export const parseRawBnf = (bnf: string): BNFSet => {
 };
 
 // かなり強引に左辺のシンボルを取得する
-export const getLeftSymbols = (bnf: string): Set<string> => {
+export const getLeftSymbols = (bnf: string, kinds: Array<string>): Set<string> => {
   const lefts = new Set<string>();
   //parseRawBnfを使うと正常時にしか動かないので、正常時のみ使い、 だめだったら 正規表現で強引に取得する
   // ただし、try-catchは重いので、あまり多用しないこと
   // なので、getRawBNFWarningThrowsの行数を利用して、警告がある場合は正規表現で強引に取得する
-  const warnings = getRawBNFWarningThrows(bnf);
+  const warnings = getRawBNFWarningThrows(bnf, kinds);
   if (warnings.length > 0) {
     // 警告がある場合は正規表現で強引に取得
     const lines = bnf.split("\n").map((line) => line.trim());
@@ -131,7 +134,7 @@ export const getLeftSymbols = (bnf: string): Set<string> => {
   }
 
   // 警告がない場合はparseRawBnfを使う
-  const bnfSet = parseRawBnf(bnf);
+  const bnfSet = parseRawBnf(bnf, kinds);
   bnfSet.getBNFs().forEach((bnf) => {
     lefts.add(bnf.getLeft());
   });
@@ -170,11 +173,11 @@ export const getTerminalSymbols = (bnfSet: BNFSet): Set<string> => {
 };
 
 // 名前のbnfを受け取って、構文にミス（存在しない非終端記号）などがあれば、行数を含む警告を投げる
-export const getRawBNFWarningThrows = (bhf: string): BNFError => {
+export const getRawBNFWarningThrows = (bhf: string, kinds: Array<string>): BNFError => {
   const warnings: BNFError = [];
   const bnfSet = (() => {
     try {
-      return parseRawBnf(bhf);
+      return parseRawBnf(bhf, kinds);
     } catch (e) {
       warnings.push({
         error: (e as Error).message.split("\n")[1],
@@ -211,8 +214,13 @@ export const getRawBNFWarningThrows = (bhf: string): BNFError => {
   bnfSet.getBNFs().forEach((bnf, index) => {
     bnf.getRight().forEach((concat) => {
       concat.getElements().forEach((elem) => {
+        if (kinds.includes(elem.getValue())) {
+          // 予約語として使っている場合は警告を出さない
+          return;
+        }
+
         // 大文字以外なら、終端記号の意図として使っているならば、シングルクオーテーションで囲むべき
-        if (elem.getType() === "nonterminal" && /[^A-Z_]/.test(elem.getValue()) && !terminals.has(elem.getValue()) && elem.getValue() !== "ε") {
+        else if (elem.getType() === "nonterminal" && /[^A-Z_]/.test(elem.getValue()) && !terminals.has(elem.getValue()) && elem.getValue() !== "ε") {
           warnings.push({
             error: `非終端記号 '${elem.getValue()}' は大文字とアンダースコアのみで構成されるべきです。終端記号として使用する場合はシングルクオーテーションで囲んでください。`,
             line: index, // 行数は0始まりにする

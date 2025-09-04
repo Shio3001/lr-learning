@@ -17,6 +17,9 @@ import LRTable from "../component/LRTable";
 import { parseProgram } from "../compiler/parseProgram";
 import { Token, lex } from "./../compiler/tsLexerLib";
 import TreeView from "../component/TreeView";
+import LinterExercise from "../component/LinterExercise";
+import { ParseTreeNode, ParseLog } from "../compiler/interface/tree";
+import { linterReducer, bootRules } from "../helper/studyLitner";
 
 const MainPage = () => {
   // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
@@ -32,9 +35,21 @@ const MainPage = () => {
         return state;
     }
   }, []);
+  // const kinds = lex(program).map((t: Token) => t.kind); をuseMemoでメモ化programが変わったときだけ更新
+  const [kinds, setKinds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const tokens = lex(program);
+    const uniqueKinds = Array.from(new Set(tokens.map((t: Token) => t.kind)));
+    setKinds(uniqueKinds);
+  }, [program]);
+
+  const getReservedWords = () => {
+    return [...kinds, "->", ...getLeft(), "|"];
+  };
 
   const getBNFset = () => {
-    return getRawBNFWarningThrows(bnf).length === 0 ? parseRawBnf(bnf) : new BNFSet();
+    return getRawBNFWarningThrows(bnf, kinds).length === 0 ? parseRawBnf(bnf, kinds) : new BNFSet();
   };
 
   const getTerminal = () => {
@@ -42,7 +57,7 @@ const MainPage = () => {
   };
 
   const getLeft = () => {
-    return getLeftSymbols(bnf);
+    return getLeftSymbols(bnf, kinds);
   };
 
   const getLRItemSets = () => {
@@ -121,6 +136,11 @@ const MainPage = () => {
     }
   }, [bnf]);
 
+  const [linterStore, sendLinter] = useReducer(linterReducer, {
+    reservedWords: kinds.filter((k) => k !== "S" && k.length > 1),
+    ruleList: bootRules,
+  });
+
   return (
     <div>
       <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>
@@ -129,15 +149,16 @@ const MainPage = () => {
         handler={setBnf}
         candidates={(() => {
           //lex(program)の 結果を取得し、kindの重複を除いた配列を作成
-          const tokens = lex(program);
-          const kinds = Array.from(new Set(tokens.map((t) => t.kind)));
-          return [...kinds, "->", ...getLeft(), "|"];
+          // ただし、1文字のものは除外する
+          return getReservedWords().filter((k) => k !== "S" && k.length > 1);
         })()}
       />
+      <h3>現在の構文解析予約語一覧</h3>
+      <p>{getReservedWords().join(" ")}</p>
       {/* <p>ε : 空集合記号（コピーして使ってください）</p> */}
       <div>
         {/* エラーをそれぞれpタグで囲って表示 */}
-        {getRawBNFWarningThrows(bnf).map((e, i) => (
+        {getRawBNFWarningThrows(bnf, kinds).map((e, i) => (
           <p key={i} style={{ color: e.isError ? "red" : "orange" }}>
             (行: {e.line}) {e.error}
           </p>
@@ -161,6 +182,24 @@ const MainPage = () => {
         }
       </p>
       {getTreesComponent()}
+      <LinterExercise
+        onUpsertRule={(rule) => sendLinter({ type: "LINT_RULE_UPSERT", payload: rule })}
+        onToggleRule={(id, enabled) => sendLinter({ type: "LINT_RULE_TOGGLE", id, enabled })}
+        onRemoveRule={(id) => sendLinter({ type: "LINT_RULE_REMOVE", id })}
+        rules={linterStore.ruleList}
+        symbolCandidates={kinds}
+        tree={((): ParseTreeNode => {
+          // getTrees()の最後の要素を取得する。ただし、stringの場合はその前のstring以外になるまで遡る
+          const trees = getTrees();
+
+          for (let i = trees.length - 1; i >= 0; i--) {
+            if (typeof trees[i] !== "string") {
+              return (trees[i] as ParseLog).tree;
+            }
+          }
+          return { symbol: "Error", children: [] };
+        })()}
+      />
     </div>
   );
 };
