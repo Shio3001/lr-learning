@@ -61,12 +61,13 @@ type PatternSpec =
   | { id: string; parent: string; childrenStartsWith: string[]; message?: string; severity?: Severity; enabled?: boolean };
 
 function patternToRule(p: PatternSpec): Rule {
+  console.log("patternToRule:", p);
   const base: Omit<Rule, "check"> = {
     id: p.id,
     description:
       "exactChildren" in p
-        ? `Parent "${(p as any).parent}" must have children exactly: ${(p as any).exactChildren.join(" ")}`
-        : `Parent "${(p as any).parent}" must start children with: ${(p as any).childrenStartsWith.join(" ")}`,
+        ? `Parent "${(p as any).parent}" の子が [${(p as any).exactChildren.join(", ")}] と完全一致`
+        : `Parent "${(p as any).parent}" の子が [${(p as any).childrenStartsWith.join(", ")}] で始まる`,
     severity: (p as any).severity ?? "error",
     enabled: (p as any).enabled ?? true,
     kind: "exactChildren" in p ? "pattern-exact" : "pattern-prefix",
@@ -84,7 +85,9 @@ function patternToRule(p: PatternSpec): Rule {
           return [
             {
               ruleId: p.id,
-              message: p.message ?? `Expected children: [${expect.join(", ")}], but got [${actual.join(", ")}]`,
+              // message: p.message ?? `Expected children: [${expect.join(", ")}], but got [${actual.join(", ")}]`,
+              // 日本語で
+              message: p.message ?? `子要素が [${expect.join(", ")}] と完全一致する必要がありますが、[${actual.join(", ")}] になっています`,
               severity: base.severity!,
               path,
             },
@@ -104,7 +107,9 @@ function patternToRule(p: PatternSpec): Rule {
           return [
             {
               ruleId: p.id,
-              message: p.message ?? `Children must start with: [${expect.join(", ")}], but got [${actual.join(", ")}]`,
+              //   message: p.message ?? `Children must start with: [${expect.join(", ")}], but got [${actual.join(", ")}]`
+              // 日本語で,
+              message: p.message ?? `子要素が [${expect.join(", ")}] で始まる必要がありますが、[${actual.join(", ")}] になっています`,
               severity: base.severity!,
               path,
             },
@@ -140,6 +145,7 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
     const key = (d: Diagnostic) => `${d.ruleId}@${d.path.join(".")}:${d.message}`;
     const m = new Map<string, Diagnostic>();
     out.forEach((d) => m.set(key(d), d));
+    console.log("LinterExercise: calculating diagnostics...", tree, rules, m.values());
     return Array.from(m.values());
   }, [tree, rules]);
 
@@ -291,12 +297,12 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         <label style={styles.lbl}>
           種類
           <select value={mode} onChange={(e) => setMode(e.target.value as "pattern-exact" | "pattern-prefix")} style={styles.input}>
-            <option value="pattern-prefix">childrenStartsWith</option>
-            <option value="pattern-exact">exactChildren</option>
+            <option value="pattern-prefix">子要素先頭一致</option>
+            <option value="pattern-exact">完全一致</option>
           </select>
         </label>
         <label style={styles.lbl}>
-          Severity
+          表示区分（仮想重要度）
           <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)} style={styles.input}>
             <option value="error">error</option>
             <option value="warning">warning</option>
@@ -307,9 +313,9 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
 
       <div style={styles.builderRow}>
         <label style={styles.lblWide}>
-          ルールID
+          ルール名（ユニーク）
           <input value={id} onChange={(e) => setId(e.target.value)} placeholder="例: pat.list-head" style={styles.input} />
-          {idClash && <span style={{ color: "#d32f2f", fontSize: 12, marginLeft: 8 }}>その ID は既に使われています</span>}
+          {idClash && <span style={{ color: "#d32f2f", fontSize: 12, marginLeft: 8 }}>その 名 は既に使われています</span>}
         </label>
       </div>
 

@@ -88,6 +88,7 @@ export function linterReducer(store: LinterStore, action: LinterAction): LinterS
       };
     }
     case "LINT_RULE_UPSERT": {
+      console.log("LinterReducer: UPSERT", action.payload);
       const idx = store.ruleList.findIndex((r) => r.id === action.payload.id);
       if (idx >= 0) {
         const next = store.ruleList.slice();

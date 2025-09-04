@@ -137,7 +137,7 @@ const MainPage = () => {
   }, [bnf]);
 
   const [linterStore, sendLinter] = useReducer(linterReducer, {
-    reservedWords: kinds.filter((k) => k !== "S" && k.length > 1),
+    reservedWords: [...getReservedWords().filter((k) => k !== "S" && k.length > 1), "ROOT"],
     ruleList: bootRules,
   });
 
@@ -172,7 +172,7 @@ const MainPage = () => {
       <LRTable table={table} lightUpState={null} lightUpToken={null}></LRTable>
       <h2>構文解析したいプログラムを入力してください（TypeScript処理系準拠）</h2>
       <Textarea text={program} handler={setProgram} />
-      <p>
+      <div>
         {
           //{lex(program)}を表示
           (() => {
@@ -180,7 +180,7 @@ const MainPage = () => {
             return <pre>{JSON.stringify(tokens, null, 2)}</pre>;
           })()
         }
-      </p>
+      </div>
       {getTreesComponent()}
       <LinterExercise
         onUpsertRule={(rule) => sendLinter({ type: "LINT_RULE_UPSERT", payload: rule })}
