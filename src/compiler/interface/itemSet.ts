@@ -25,6 +25,14 @@ export class LRItemSet {
     return this.lrItems;
   }
 
+  hasItem(item: LRItem): boolean {
+    return this.lrItems.some((i) => i.getHash() === item.getHash());
+  }
+
+  getItems() {
+    return this.lrItems;
+  }
+
   /**
    * このアイテム集合内でのクロージャーの計算をする
    * このクラスの債務が肥大化しないよう、この中ではアイテム集合をまたいだ再帰計算を行わない

@@ -43,6 +43,14 @@ export class BNFElement {
   getHashByDot(dot: number): string {
     return encryptSha256(`${this.type}|${this.value}|${this.wildcard}|${dot}`);
   }
+
+  isTerminal(): boolean {
+    return this.type === "terminal";
+  }
+
+  isNonTerminal(): boolean {
+    return this.type === "nonterminal";
+  }
 }
 
 export class BNFConcatenation {
@@ -72,6 +80,10 @@ export class BNFConcatenation {
 
   getLeft() {
     return this.left;
+  }
+
+  getRight() {
+    return this.elements; // 右辺の要素列を返す
   }
 }
 
@@ -115,6 +127,10 @@ export class BNFSet {
 
   constructor() {
     this.bnfs = [];
+  }
+
+  hasNonTerminal(nt: string): boolean {
+    return this.bnfs.some((bnf) => bnf.getLeft() === nt);
   }
 
   getBNFs() {
