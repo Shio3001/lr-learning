@@ -85,6 +85,10 @@ export class BNFConcatenation {
   getRight() {
     return this.elements; // 右辺の要素列を返す
   }
+
+  getLeftRight() {
+    return { left: this.left, right: this.elements };
+  }
 }
 
 export class BNF {

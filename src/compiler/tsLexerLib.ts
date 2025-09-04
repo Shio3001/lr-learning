@@ -4,6 +4,13 @@
 import * as ts from "typescript";
 
 export type TokenCategory = "keyword" | "identifier" | "literal" | "punctuation" | "trivia" | "other";
+// TokenCategoryはそれぞれ
+// keyword: if, else, return, function, ...
+// identifier: 変数名、関数名、クラス名など
+// literal: 数値リテラル、文字列リテラル、真偽値リテラルなど
+// punctuation: ; , . ( ) { } [ ] < > + - * / = などの記号
+// trivia: 空白、改行、コメントなどの解析に影響しない部分
+// other: 上記に分類されないその他のトークン
 
 export type Token = {
   kindId: number; // ts.SyntaxKind の数値
