@@ -73,7 +73,11 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
               <td
                 key={`action-${row.state}-${terminal}`}
                 style={{
-                  backgroundColor: lightUpState === row.state && lightUpToken === terminal ? "yellow" : "transparent",
+                  backgroundColor: (() => {
+                    if (lightUpState === row.state && lightUpToken === terminal) return "yellow";
+                    if (row.isConflictStateList?.includes(terminal)) return "red";
+                    return "transparent";
+                  })(),
                 }}
               >
                 {row.actions[terminal]
@@ -89,7 +93,11 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
             {getGotosKeys().map((nonTerminal) => (
               <td
                 style={{
-                  backgroundColor: lightUpState === row.state && lightUpToken === nonTerminal ? "yellow" : "transparent",
+                  backgroundColor: (() => {
+                    if (lightUpState === row.state && lightUpToken === nonTerminal) return "yellow";
+                    if (row.isConflictStateList?.includes(nonTerminal)) return "red";
+                    return "transparent";
+                  })(),
                 }}
                 key={`goto-${row.state}-${nonTerminal}`}
               >

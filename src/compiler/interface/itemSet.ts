@@ -111,15 +111,7 @@ export class LRItemSet {
 
             const dotNext = newItem.getDotNextElement();
 
-            if (rvItems[dotNext.getValue()]) {
-              console.warn("LR(0)のクロージャ計算で、同じ遷移先が複数回出現しました", dotNext.getValue(), rvItems[dotNext.getValue()]);
-              // rvItems[dotNext.getValue()].push(newItem.advance());
-              pushRvItems(dotNext.getValue(), newItem.advance());
-              console.log("追加されたアイテム", rvItems[dotNext.getValue()]);
-            } else {
-              // rvItems[dotNext.getValue()] = [newItem.advance()];
-              pushRvItems(dotNext.getValue(), newItem.advance());
-            }
+            pushRvItems(dotNext.getValue(), newItem.advance());
 
             // if (dotNext.getType() === "nonterminal") {
             que.push({

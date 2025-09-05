@@ -22,6 +22,7 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
       state: stateIndex,
       actions: {},
       gotos: {},
+      isConflictStateList: [],
     };
 
     itemSet.getItems().forEach((item) => {
@@ -37,6 +38,18 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
 
         if (dotNext.isTerminal()) {
           // 終端記号ならactionに追加
+
+          if (row.actions[dotNext.getValue()]) {
+            // すでに同じアクションが存在する場合、コンフリクト
+            // throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
+            console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[dotNext.getValue()], {
+              type: "shift",
+              toState: nextState,
+            });
+            row.isConflictStateList?.push(dotNext.getValue());
+            return;
+          }
+
           row.actions[dotNext.getValue()] = { type: "shift", toState: nextState };
         } else {
           // 非終端記号ならgotoに追加
@@ -53,7 +66,14 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
           // それ以外はリダクション
           // すでに同じアクションが存在する場合、コンフリクト
           if (row.actions["$"] && row.actions["$"].type !== "accept") {
-            throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
+            // throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
+            console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions["$"], {
+              type: "reduce",
+              by: item.getConcatenation(),
+            });
+            // row.isConflict = true;
+            row.isConflictStateList?.push("$");
+            return;
           }
 
           /**
@@ -61,7 +81,14 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
            */
           bnfSet.getAllTerminals().forEach((terminal) => {
             if (row.actions[terminal] && row.actions[terminal].type !== "accept") {
-              throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
+              // throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
+              console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[terminal], {
+                type: "reduce",
+                by: item.getConcatenation(),
+              });
+              // row.isConflict = true;
+              row.isConflictStateList?.push(terminal);
+              return;
             }
             row.actions[terminal] = { type: "reduce", by: item.getConcatenation() };
           });

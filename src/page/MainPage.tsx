@@ -144,6 +144,7 @@ const MainPage = () => {
       setTable({ type: "SET_TABLE", payload: newTable });
     } catch (e) {
       setTable({ type: "SET_TABLE", payload: [] });
+      console.error(e);
     }
   }, [bnf]);
 
@@ -189,6 +190,32 @@ const MainPage = () => {
         </ReactFlowProvider>
       </div>
       <LRTable table={table} lightUpState={null} lightUpToken={null}></LRTable>
+      <p>コンフリクトが発生しているセルは赤色で表示されます。</p>
+      {/* コンフリクト発生個所を表示 */}
+      <div>
+        <h3>コンフリクト発生箇所</h3>
+        {(table as TransitionTable)
+          .map((row) => {
+            const conflicts: string[] = [];
+            // if (row.isConflict) {
+            //   conflicts.push(`状態 ${row.state} にコンフリクトがあります。`);
+            // }
+            if (row.isConflictStateList && row.isConflictStateList.length > 0) {
+              row.isConflictStateList.forEach((token) => {
+                conflicts.push(`状態 ${row.state}、トークン '${token}' にコンフリクトがあります。`);
+              });
+            }
+            return conflicts;
+          })
+          .flat()
+          .map((msg, i) => (
+            <p key={i} style={{ color: "red" }}>
+              {msg}
+            </p>
+          ))}
+        {(table as TransitionTable).every((row) => !row.isConflictStateList || row.isConflictStateList.length === 0) && <p>コンフリクトは発生していません。</p>}
+      </div>
+
       <h2>構文解析したいプログラムを入力してください（TypeScript処理系準拠）</h2>
       <Textarea text={program} handler={setProgram} />
       <div>

@@ -210,9 +210,9 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
         </fieldset>
 
         <fieldset style={styles.diagBox}>
-          <legend style={styles.legend}>Diagnostics</legend>
+          <legend style={styles.legend}>Linterもどきエラー</legend>
           {diagnostics.length === 0 ? (
-            <div style={{ color: "#6a6a6a" }}>No issues 🎉</div>
+            <div style={{ color: "#6a6a6a" }}>No issues </div>
           ) : (
             <ol style={{ margin: 0, paddingLeft: 20 }}>
               {diagnostics.map((d, i) => (
@@ -232,7 +232,6 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
                     {d.severity}
                   </span>
                   <code style={{ background: "#f6f6f6", padding: "1px 4px", borderRadius: 4 }}>{d.ruleId}</code> — {d.message}
-                  <span> {d.message}</span>
                   <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
                     <button onClick={() => setFocusPath(d.path)} style={styles.linkBtn} title="該当ノードへフォーカス">
                       node: {pathToString(tree, d.path)}
