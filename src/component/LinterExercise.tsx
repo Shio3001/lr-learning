@@ -57,8 +57,8 @@ function findNodeByPath(root: ParseTreeNode, path: number[]): ParseTreeNode | nu
 
 /** --- Declarative pattern helpers --- */
 type PatternSpec =
-  | { id: string; parent: string; exactChildren: string[]; message?: string; severity?: Severity; enabled?: boolean }
-  | { id: string; parent: string; childrenStartsWith: string[]; message?: string; severity?: Severity; enabled?: boolean };
+  | { id: string; parent: string; exactChildren: string[]; message?: string; severity?: Severity; enabled?: boolean; effectiveInversion?: boolean }
+  | { id: string; parent: string; childrenStartsWith: string[]; message?: string; severity?: Severity; enabled?: boolean; effectiveInversion?: boolean };
 
 function patternToRule(p: PatternSpec): Rule {
   console.log("patternToRule:", p);
@@ -73,6 +73,9 @@ function patternToRule(p: PatternSpec): Rule {
     kind: "exactChildren" in p ? "pattern-exact" : "pattern-prefix",
   };
 
+  // Effective inversion true : 条件に一致するとき警告を出す。 false : 条件に一致しないとき、警告を出す
+  const effectiveInversion = p.effectiveInversion ?? true;
+
   if ("exactChildren" in p) {
     return {
       ...base,
@@ -80,14 +83,29 @@ function patternToRule(p: PatternSpec): Rule {
         if (node.symbol !== p.parent) return;
         const actual = node.children?.map((c) => c.symbol) ?? [];
         const expect = p.exactChildren;
+
+        // ルールに合致したかどうか
         const ok = actual.length === expect.length && actual.every((s, i) => s === expect[i]);
-        if (!ok) {
+
+        // effectiveInversion に応じて、ok の真偽を反転させる
+        if (!ok && !effectiveInversion) {
           return [
             {
               ruleId: p.id,
               // message: p.message ?? `Expected children: [${expect.join(", ")}], but got [${actual.join(", ")}]`,
               // 日本語で
               message: p.message ?? `子要素が [${expect.join(", ")}] と完全一致する必要がありますが、[${actual.join(", ")}] になっています`,
+              severity: base.severity!,
+              path,
+            },
+          ];
+        }
+
+        if (ok && effectiveInversion) {
+          return [
+            {
+              ruleId: p.id,
+              message: p.message ?? `子要素が [${expect.join(", ")}] と完全一致しています。`,
               severity: base.severity!,
               path,
             },
@@ -103,13 +121,23 @@ function patternToRule(p: PatternSpec): Rule {
         const actual = node.children?.map((c) => c.symbol) ?? [];
         const expect = p.childrenStartsWith;
         const ok = actual.length >= expect.length && expect.every((s, i) => actual[i] === s);
-        if (!ok) {
+        if (!ok && !effectiveInversion) {
           return [
             {
               ruleId: p.id,
               //   message: p.message ?? `Children must start with: [${expect.join(", ")}], but got [${actual.join(", ")}]`
               // 日本語で,
               message: p.message ?? `子要素が [${expect.join(", ")}] で始まる必要がありますが、[${actual.join(", ")}] になっています`,
+              severity: base.severity!,
+              path,
+            },
+          ];
+        }
+        if (ok && effectiveInversion) {
+          return [
+            {
+              ruleId: p.id,
+              message: p.message ?? `子要素が [${expect.join(", ")}] で始まっています。`,
               severity: base.severity!,
               path,
             },
@@ -204,6 +232,7 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
                     {d.severity}
                   </span>
                   <code style={{ background: "#f6f6f6", padding: "1px 4px", borderRadius: 4 }}>{d.ruleId}</code> — {d.message}
+                  <span> {d.message}</span>
                   <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
                     <button onClick={() => setFocusPath(d.path)} style={styles.linkBtn} title="該当ノードへフォーカス">
                       node: {pathToString(tree, d.path)}
@@ -250,6 +279,9 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
   const [severity, setSeverity] = useState<Severity>("error");
   const [message, setMessage] = useState("");
 
+  //Effective inversion true : 条件に一致するとき警告を出す。 false : 条件に一致しないとき、警告を出す
+  const [effectiveInversion, setEffectiveInversion] = useState(true);
+
   const children = useMemo(
     () =>
       childrenText
@@ -272,6 +304,7 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         message: message.trim() || undefined,
         severity,
         enabled: true,
+        effectiveInversion,
       });
     } else {
       onAdd({
@@ -281,6 +314,7 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         message: message.trim() || undefined,
         severity,
         enabled: true,
+        effectiveInversion,
       });
     }
     setId("");
@@ -289,6 +323,7 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
     setMessage("");
     setSeverity("error");
     setMode("pattern-prefix");
+    setEffectiveInversion(true);
   };
 
   return (
@@ -307,6 +342,13 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
             <option value="error">error</option>
             <option value="warning">warning</option>
             <option value="info">info</option>
+          </select>
+        </label>
+        <label style={styles.lbl}>
+          有効化反転
+          <select value={effectiveInversion ? "true" : "false"} onChange={(e) => setEffectiveInversion(e.target.value === "true")} style={styles.input}>
+            <option value="true">条件に一致するとき警告</option>
+            <option value="false">条件に一致しないとき警告</option>
           </select>
         </label>
       </div>
