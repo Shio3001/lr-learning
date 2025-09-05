@@ -36,7 +36,7 @@ const MainPage = () => {
   const [table, setTable] = useReducer((state, action) => {
     switch (action.type) {
       case "SET_TABLE":
-        console.log("SET_TABLE tableを更新しました", algorithm);
+        console.log("SET_TABLE tableを更新しました", algorithm, action.payload);
         return action.payload;
       default:
         return state;
