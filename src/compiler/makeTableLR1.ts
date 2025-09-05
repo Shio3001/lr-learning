@@ -1,4 +1,4 @@
-// LTItemsから状態遷移表を作る（LR(1)対応・冪等/衝突整理済み）
+// LTItemsから状態遷移表を作る（LR(1)対応・記号ごとグルーピング・冪等/衝突整理）
 
 import { BNFSet, BNFConcatenation } from "./interface/bnf";
 import { LRItemSet } from "./interface/lr0ItemSet";
@@ -30,9 +30,7 @@ const getLookaheadSet = (item: LRItem): Set<string> => {
     if (one == null) return new Set<string>();
     return new Set<string>([String(one)]);
   }
-
-  // LR(0) 相当（ここでは reduce 先を決められないので空集合にしてスキップさせる）
-  return new Set<string>();
+  return new Set<string>(); // LR(0) 相当 → reduce ではスキップ
 };
 
 /** 同一値を重複追加しない push */
@@ -43,34 +41,44 @@ const conflictPushUnique = (list: Array<number | BNFConcatenation | null>, v: nu
   if (!has) list.push(v);
 };
 
-/** 次状態を探す：hasItem が lookahead 比較を含む実装でも拾えるよう core 一致でフォールバック */
-const findNextStateIndex = (sets: Array<LR1ItemSet | LRItemSet>, advanced: LRItem): number => {
-  // まずはそのまま
-  const idx = (sets as any[]).findIndex((s) => s.hasItem?.(advanced));
-  if (idx !== -1) return idx;
-
-  // hasCoreItem があれば使う
-  const idx2 = (sets as any[]).findIndex((s) => typeof s.hasCoreItem === "function" && s.hasCoreItem(advanced));
-  if (idx2 !== -1) return idx2;
-
-  // 最後の手段：規則＋ドット位置で一致検索
-  return (sets as any[]).findIndex((s) => {
-    const items: LRItem[] = s.getItems?.() ?? [];
-    return items.some((it: any) => {
-      const sameRule =
-        it.getConcatenation?.().equals?.(advanced.getConcatenation?.()) ?? it.getConcatenation?.().toString?.() === advanced.getConcatenation?.().toString?.();
-      const sameDot = it.getDotPosition?.() === advanced.getDotPosition?.();
-      return sameRule && sameDot;
-    });
+/** 状態 s が advanced の「コア（規則＋ドット位置）」を含むか */
+const hasCoreItem = (s: any, advanced: LRItem): boolean => {
+  if (typeof s.hasCoreItem === "function") return s.hasCoreItem(advanced);
+  const items: LRItem[] = s.getItems?.() ?? [];
+  return items.some((it: any) => {
+    const sameRule =
+      it.getConcatenation?.().equals?.(advanced.getConcatenation?.()) ?? it.getConcatenation?.().toString?.() === advanced.getConcatenation?.().toString?.();
+    const sameDot = it.getDotPosition?.() === advanced.getDotPosition?.();
+    return sameRule && sameDot;
   });
 };
 
-/** 既存アクションにぶつかったら conflict にまとめる（同一内容は無視して冪等化） */
+/** 記号ごとにまとめた advanced コア集合をすべて含む唯一の goto 先状態を特定する */
+const findGotoStateForGroup = (allSets: Array<LR1ItemSet | LRItemSet>, groupAdvanced: LRItem[]): number => {
+  const candidates: number[] = [];
+
+  for (let i = 0; i < allSets.length; i++) {
+    const s = allSets[i];
+    const ok = groupAdvanced.every((adv) => hasCoreItem(s, adv));
+    if (ok) candidates.push(i);
+  }
+
+  if (candidates.length === 1) return candidates[0];
+
+  if (candidates.length === 0) {
+    throw new Error("goto 先状態が見つかりません（カーネル一致なし）");
+  }
+
+  // 同じカーネルの重複状態が存在する可能性。最小 index を採用し警告。
+  console.warn("同一カーネルの状態が複数見つかりました。最小 index を採用します:", candidates);
+  return Math.min(...candidates);
+};
+
+/** 既存アクションにぶつかったら conflict にまとめる（同一内容は無視） */
 const replaceConflict = (row: TransitionTableRow, terminal: string, incoming: { type: "shift" | "reduce"; by: number | BNFConcatenation }) => {
   const ex = row.actions[terminal];
   if (!ex || ex.type === "accept") return;
 
-  // 既存と incoming が完全同一なら何もしない
   if (ex.type === "shift" && incoming.type === "shift" && ex.toState === incoming.by) return;
   if (ex.type === "reduce" && incoming.type === "reduce" && eqConcat(ex.by, incoming.by as BNFConcatenation)) return;
 
@@ -79,7 +87,6 @@ const replaceConflict = (row: TransitionTableRow, terminal: string, incoming: { 
     return;
   }
 
-  // ex が shift/reduce のとき conflict に昇格
   const list: Array<number | BNFConcatenation | null> = [];
   if (ex.type === "shift") list.push(ex.toState);
   if (ex.type === "reduce") list.push(ex.by);
@@ -109,56 +116,63 @@ const setReduce = (row: TransitionTableRow, terminal: string, by: BNFConcatenati
   replaceConflict(row, terminal, { type: "reduce", by });
 };
 
-/** LR(1) 用：アイテム集合配列から状態遷移表を作成 */
+/** 記号キー（終端/非終端を区別） */
+const symKey = (isTerm: boolean, v: string) => (isTerm ? `T|${v}` : `N|${v}`);
+const parseSymKey = (k: string): { isTerm: boolean; v: string } => {
+  const [kind, ...rest] = k.split("|");
+  return { isTerm: kind === "T", v: rest.join("|") };
+};
+
+/** LR(1)：アイテム集合配列から状態遷移表を作成 */
 export const makeTransitionTableLR1 = (lrItemSets: LR1ItemSet[], bnfSet: BNFSet): TransitionTable => {
   const startSymbol = getStartSymbol(bnfSet);
   const table: TransitionTable = [];
 
   lrItemSets.forEach((itemSet, stateIndex) => {
-    const row: TransitionTableRow = {
-      state: stateIndex,
-      actions: {},
-      gotos: {},
-    };
+    const row: TransitionTableRow = { state: stateIndex, actions: {}, gotos: {} };
 
+    // 1) 記号ごとに「ドットの右がその記号」のアイテムをグルーピング
+    const groups = new Map<string, LRItem[]>();
     itemSet.getItems().forEach((item: LRItem) => {
-      const dotNext = item.getDotNextElement();
+      const nxt = item.getDotNextElement();
+      if (!nxt) return; // reduce/accept は後段で処理
+      const key = symKey(nxt.isTerminal(), nxt.getValue());
+      const arr = groups.get(key);
+      if (arr) arr.push(item);
+      else groups.set(key, [item]);
+    });
 
-      if (dotNext) {
-        // ---- shift / goto ----
-        const nextState = findNextStateIndex(lrItemSets as Array<LR1ItemSet | LRItemSet>, item.advance());
-        if (nextState === -1) {
-          throw new Error("次の状態が見つかりません。");
-        }
+    // 2) 各グループについて、一意の goto 先状態を決めて一回だけ setShift / goto
+    groups.forEach((items, key) => {
+      const { isTerm, v } = parseSymKey(key);
+      const advanced = items.map((it) => it.advance());
+      const nextState = findGotoStateForGroup(lrItemSets as Array<LR1ItemSet | LRItemSet>, advanced);
 
-        if (dotNext.isTerminal()) {
-          setShift(row, dotNext.getValue(), nextState);
-        } else {
-          const nt = dotNext.getValue();
-          if (row.gotos[nt] == null) row.gotos[nt] = nextState;
-          else if (row.gotos[nt] !== nextState) {
-            console.warn(`goto 競合: ${nt} in state ${stateIndex}`, row.gotos[nt], nextState);
-          }
+      if (isTerm) {
+        setShift(row, v, nextState);
+      } else {
+        if (row.gotos[v] == null) row.gotos[v] = nextState;
+        else if (row.gotos[v] !== nextState) {
+          console.warn(`goto 競合: ${v} in state ${stateIndex}`, row.gotos[v], nextState);
         }
-        return;
       }
+    });
 
-      // ---- reduce / accept ----
+    // 3) reduce / accept（ドットが末尾）
+    itemSet.getItems().forEach((item: LRItem) => {
+      const nxt = item.getDotNextElement();
+      if (nxt) return; // 末尾でないなら上で処理済み
+
       const left = item.getConcatenation().getLeft();
 
-      // 受理（S' -> S .）: $ のみに accept を立てる
+      // 受理（S' -> S .）: $ のみに accept
       if (left === startSymbol) {
-        if (row.actions["$"] && row.actions["$"].type !== "accept") {
-          console.warn(`状態${stateIndex}: $ に非 accept アクションが存在 → 上書きで accept`);
-        }
         row.actions["$"] = { type: "accept" };
         return;
       }
 
-      // LR(1) の reduce：各アイテムの lookahead にだけ書く
       const lookaheads = getLookaheadSet(item);
       if (lookaheads.size === 0) {
-        // 構成上の不整合（LR(0) 相当）なので警告してスキップ
         console.warn(`状態${stateIndex}：lookahead 空集合での reduce はスキップ`, item);
         return;
       }
