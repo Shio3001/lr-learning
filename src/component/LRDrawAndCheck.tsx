@@ -25,7 +25,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 
-import type { LRItemSet } from "../compiler/interface/itemSet";
+import type { LRItemSet } from "../compiler/interface/lr0ItemSet";
 import type { LRItem } from "../compiler/interface/lrItem";
 import type { BNFElement } from "../compiler/interface/bnf";
 

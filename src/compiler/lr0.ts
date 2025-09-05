@@ -3,7 +3,7 @@
  */
 
 import { BNFSet } from "./interface/bnf";
-import { LRItemSets } from "./interface/itemSet";
+import { LRItemSets } from "./interface/lr0ItemSet";
 
 const lr0 = (bnfSet: BNFSet) => {
   // LR(0) のオートマトンを構築する

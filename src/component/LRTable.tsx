@@ -3,7 +3,7 @@
 import React from "react";
 import { TransitionTable } from "../compiler/interface/transitionTable";
 import { makeTransitionTable } from "../compiler/makeTable";
-import { LRItemSet } from "../compiler/interface/itemSet";
+import { LRItemSet } from "../compiler/interface/lr0ItemSet";
 import { BNFSet } from "../compiler/interface/bnf";
 
 type LRTableProps = {

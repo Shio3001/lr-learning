@@ -143,6 +143,23 @@ export class BNFSet {
     this.bnfs = [];
   }
 
+  getRights() {
+    return this.bnfs.flatMap((bnf) => bnf.getRight());
+  }
+
+  getBNFsByLeft(left: string): BNF[] {
+    return this.bnfs.filter((bnf) => bnf.getLeft() === left);
+  }
+  getTerminals() {
+    const terminals: Set<string> = new Set();
+    this.getAllElements().forEach((elem) => {
+      if (elem.isTerminal()) {
+        terminals.add(elem.getValue());
+      }
+    });
+    return Array.from(terminals);
+  }
+
   hasNonTerminal(nt: string): boolean {
     return this.bnfs.some((bnf) => bnf.getLeft() === nt);
   }

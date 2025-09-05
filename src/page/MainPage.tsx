@@ -4,6 +4,7 @@ import Button from "../atoms/Button";
 
 import { getRawBNFWarningThrows, parseRawBnf, getTerminalSymbols, getLeftSymbols } from "../compiler/parseBnf";
 import lr0 from "../compiler/lr0";
+import lr1 from "../compiler/lr1";
 import { BNFSet, BNFElement, BNFConcatenation } from "../compiler/interface/bnf";
 
 import { useEffect, useState, useReducer } from "react";
@@ -12,6 +13,7 @@ import AutomatonGraph from "../component/AutomatonGraph";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import { makeTransitionTable } from "../compiler/makeTable";
+import { makeTransitionTableLR1 } from "../compiler/makeTableLR1";
 import { TransitionTable } from "../compiler/interface/transitionTable";
 import LRTable from "../component/LRTable";
 import { parseProgram } from "../compiler/parseProgram";
@@ -27,10 +29,14 @@ const MainPage = () => {
   const [bnf, setBnf] = useState<string>("S->LIST 'EoF'\nLIST->'LPAR' SEQ 'RPAR' | 'NUM'\nSEQ -> LIST\nSEQ -> SEQ 'COMMA' LIST");
   const [program, setProgram] = useState<string>("");
 
+  //アルゴリズム
+  const [algorithm, setAlgorithm] = useState<"LR0" | "LR1">("LR0");
+
   //const lrtableを可視化したもの useReducer
   const [table, setTable] = useReducer((state, action) => {
     switch (action.type) {
       case "SET_TABLE":
+        console.log("SET_TABLE tableを更新しました", algorithm);
         return action.payload;
       default:
         return state;
@@ -72,8 +78,16 @@ const MainPage = () => {
     return getLeftSymbols(bnf, kinds);
   };
 
-  const handlerLRItemSets = () => {
+  const handlerLR0ItemSets = () => {
     return lr0(handlerBNFset());
+  };
+
+  const handlerLR1ItemSets = () => {
+    return lr1(handlerBNFset());
+  };
+
+  const handlerLRItemSets = () => {
+    return algorithm === "LR0" ? handlerLR0ItemSets() : handlerLR1ItemSets();
   };
 
   const getTrees = () => {
@@ -141,13 +155,15 @@ const MainPage = () => {
 
   useEffect(() => {
     try {
-      const newTable: TransitionTable = makeTransitionTable(handlerLRItemSets(), handlerBNFset());
+      // const newTable: TransitionTable = makeTransitionTable(handlerLRItemSets(), handlerBNFset());
+      const newTable: TransitionTable =
+        algorithm === "LR0" ? makeTransitionTable(handlerLR0ItemSets(), handlerBNFset()) : makeTransitionTableLR1(handlerLR1ItemSets(), handlerBNFset());
       setTable({ type: "SET_TABLE", payload: newTable });
     } catch (e) {
       setTable({ type: "SET_TABLE", payload: [] });
       console.error(e);
     }
-  }, [bnf]);
+  }, [bnf, algorithm]);
 
   const [linterStore, sendLinter] = useReducer(linterReducer, {
     // reservedWords: [...kinds, "ROOT"],
@@ -157,6 +173,19 @@ const MainPage = () => {
   return (
     <div>
       <h1>プログラミング言語処理系 LR(0)法 構文解析 支援サイト</h1>
+
+      <h3>使用するアルゴリズムを選択してください</h3>
+      <div>
+        {/* ラジオボタン   */}
+        <label>
+          <input type="radio" value="LR0" checked={algorithm === "LR0"} onChange={() => setAlgorithm("LR0")} />
+          LR(0)法
+        </label>
+        <label>
+          <input type="radio" value="LR1" checked={algorithm === "LR1"} onChange={() => setAlgorithm("LR1")} />
+          LR(1)法
+        </label>
+      </div>
       <PredictionTextarea
         text={bnf}
         handler={setBnf}

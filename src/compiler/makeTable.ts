@@ -1,7 +1,8 @@
 // LTItemsから状態遷移表を作る
 
 import { BNFSet, BNFConcatenation } from "./interface/bnf";
-import { LRItemSet } from "./interface/itemSet";
+import { LRItemSet } from "./interface/lr0ItemSet";
+import { LR1ItemSet } from "./interface/lr1ItemSet";
 import { LRItem } from "./interface/lrItem";
 import { TransitionTable, TransitionTableRow, ConflictAction } from "./interface/transitionTable";
 

@@ -3,13 +3,13 @@ import { BNFSet, BNFConcatenation, BNFElement } from "./bnf";
 import { encryptSha256 } from "../../helper/hash.js";
 export class LRItemSet {
   //最終的なLRオートマトン集合の、ノードの状態を表す成果物
-  private lrItems: LRItem[];
+  protected lrItems: LRItem[];
 
   // 遷移先
-  private goto: Map<string, number>;
+  protected goto: Map<string, number>;
 
   // このclassにitemを渡す時点で、item.advance()を実行していること！展開の基準となります
-  constructor(private readonly initItems: Array<LRItem>) {
+  constructor(protected readonly initItems: Array<LRItem>) {
     this.lrItems = [];
 
     this.goto = new Map<string, number>();
@@ -158,7 +158,7 @@ export class LRItemSet {
 export class LRItemSets {
   private itemSets: Array<LRItemSet>;
 
-  constructor(private readonly BNFSet: BNFSet) {
+  constructor(protected readonly BNFSet: BNFSet) {
     this.itemSets = [];
   }
 

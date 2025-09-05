@@ -17,11 +17,12 @@ import {
 import "@xyflow/react/dist/style.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 
-import type { LRItemSet } from "../compiler/interface/itemSet";
+import type { LRItemSet } from "../compiler/interface/lr0ItemSet";
 import type { LRItem } from "../compiler/interface/lrItem";
 import type { BNFElement } from "../compiler/interface/bnf";
 import { encryptSha256 } from "../helper/hash.js";
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from "@xyflow/react";
+import { LR1ItemSet } from "../compiler/interface/lr1ItemSet";
 
 // cubic Bézier の点を t で求める
 const bz = (t: number, p0: number, p1: number, p2: number, p3: number) => {
@@ -88,7 +89,7 @@ const edgeTypes = { selfLoop: SelfLoopEdge };
 // JSX
 
 // ===== サイズ定数 =====
-const NODE_W = 300;
+const NODE_W = 500;
 const NODE_H = 160;
 const HANDLE_OUT = 18; // 好みで 8〜14px
 
@@ -130,7 +131,7 @@ function LrStateNode({ data }: { data: { title: string; body: string; accepting:
 const nodeTypes = { lrState: LrStateNode };
 
 type Props = {
-  lrItemSets: LRItemSet[];
+  lrItemSets: LRItemSet[] | LR1ItemSet[];
   terminals: Set<string>;
 };
 
@@ -171,6 +172,12 @@ function fmtElementsWithDot(elements: BNFElement[], dotPos: number): string {
 }
 function fmtItem(item: LRItem): string {
   const c = item.getConcatenation();
+
+  const lockahead = item.getLookahead();
+  if (lockahead && lockahead.length > 0) {
+    return `${c.getLeft()} → ${fmtElementsWithDot(c.getElements() as any, item.getDotPosition())} [${lockahead}]`;
+  }
+
   return `${c.getLeft()} → ${fmtElementsWithDot(c.getElements() as any, item.getDotPosition())}`;
 }
 const isAccepting = (items: LRItem[]): boolean =>
@@ -188,14 +195,14 @@ function snapshotItem(item: LRItem) {
     dot: item.getDotPosition(),
   };
 }
-function snapshotSet(set: LRItemSet) {
+function snapshotSet(set: LRItemSet | LR1ItemSet) {
   const items = set.getLRItems().map(snapshotItem);
   const gotos: Array<{ sym: string; to: number }> = [];
   set.getGotos().forEach((to, sym) => gotos.push({ sym, to }));
   gotos.sort((a, b) => (a.sym < b.sym ? -1 : a.sym > b.sym ? 1 : 0));
   return { items, gotos };
 }
-function computeGraphKeyDeep(lrItemSets: LRItemSet[]) {
+function computeGraphKeyDeep(lrItemSets: LRItemSet[] | LR1ItemSet[]) {
   return encryptSha256(JSON.stringify(lrItemSets.map(snapshotSet)));
 }
 
@@ -210,6 +217,7 @@ export default function AutomatonGraph({ lrItemSets, terminals }: Props) {
       const items = set.getLRItems();
       const body = items.map(fmtItem).join("\n");
       const accepting = isAccepting(items);
+
       return {
         id: idOf(i), // ★ id に version を混ぜる
         type: "lrState",
