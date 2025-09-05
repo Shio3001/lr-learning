@@ -154,15 +154,17 @@ const MainPage = () => {
   };
 
   useEffect(() => {
-    try {
-      // const newTable: TransitionTable = makeTransitionTable(handlerLRItemSets(), handlerBNFset());
-      const newTable: TransitionTable =
-        algorithm === "LR0" ? makeTransitionTable(handlerLR0ItemSets(), handlerBNFset()) : makeTransitionTableLR1(handlerLR1ItemSets(), handlerBNFset());
-      setTable({ type: "SET_TABLE", payload: newTable });
-    } catch (e) {
-      setTable({ type: "SET_TABLE", payload: [] });
-      console.error(e);
-    }
+    (async () => {
+      try {
+        // const newTable: TransitionTable = makeTransitionTable(handlerLRItemSets(), handlerBNFset());
+        const newTable: TransitionTable =
+          algorithm === "LR0" ? makeTransitionTable(handlerLR0ItemSets(), handlerBNFset()) : makeTransitionTableLR1(handlerLR1ItemSets(), handlerBNFset());
+        setTable({ type: "SET_TABLE", payload: newTable });
+      } catch (e) {
+        setTable({ type: "SET_TABLE", payload: [] });
+        console.error(e);
+      }
+    })();
   }, [bnf, algorithm]);
 
   const [linterStore, sendLinter] = useReducer(linterReducer, {

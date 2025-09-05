@@ -165,7 +165,7 @@ export class LR1ItemSets {
    * LR(1) の集合計算開始
    * @param startLookahead 既定は "EoF"
    */
-  startCalculation(startLookahead: string = "EoF") {
+  startCalculation(startLookahead: string = "$") {
     // 拡張開始規則 S'→・S を想定：既存の BNFSet.getStartSymbol() が S'→S なら 0 ドットで OK
     const startConcat = this.BNFSet.getStartSymbol();
     const startItem = new LRItem(startConcat, 0, startLookahead);
