@@ -1,9 +1,9 @@
 // LTItemsから状態遷移表を作る
 
-import { BNFSet } from "./interface/bnf";
+import { BNFSet, BNFConcatenation } from "./interface/bnf";
 import { LRItemSet } from "./interface/itemSet";
 import { LRItem } from "./interface/lrItem";
-import { TransitionTable, TransitionTableRow } from "./interface/transitionTable";
+import { TransitionTable, TransitionTableRow, ConflictAction } from "./interface/transitionTable";
 
 // 開始記号はS もしくはS`があればS`
 const getStartSymbol = (bnfSet: BNFSet): string => {
@@ -22,7 +22,40 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
       state: stateIndex,
       actions: {},
       gotos: {},
-      isConflictStateList: [],
+    };
+
+    // 書き換える場所と、新たに発生した遷移を渡すので、rowを書き換える（引数のactionは型の問題からそのまま使ってはならない）
+    const replaceConflict = (action: { type: "shift" | "reduce"; by: BNFConcatenation | number }, terminal: string) => {
+      if (row.actions[terminal] && row.actions[terminal].type !== "accept") {
+        // すでに同じアクションが存在する場合、コンフリクト
+        console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[terminal], action);
+        //conflictActionに書き換える
+        const existing = row.actions[terminal];
+        if (existing.type === "conflict") {
+          // すでにconflictActionなら、byに追加する
+          if (action.type === "shift") {
+            existing.list.push(action.by as number);
+          } else if (action.type === "reduce") {
+            existing.list.push(action.by as BNFConcatenation);
+          }
+        } else {
+          // まだconflictActionでなければ、conflictActionに書き換える
+          const list: Array<BNFConcatenation | number | null> = [];
+          if (existing.type === "shift") {
+            list.push(existing.toState);
+          } else if (existing.type === "reduce") {
+            list.push(existing.by);
+          }
+          if (action.type === "shift") {
+            list.push(action.by as number);
+          } else if (action.type === "reduce") {
+            list.push(action.by as BNFConcatenation);
+          }
+          row.actions[terminal] = { type: "conflict", list };
+        }
+        return true;
+      }
+      return false;
     };
 
     itemSet.getItems().forEach((item) => {
@@ -46,7 +79,9 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
               type: "shift",
               toState: nextState,
             });
-            row.isConflictStateList?.push(dotNext.getValue());
+            //conflictActionに書き換える
+            replaceConflict({ type: "shift", by: nextState }, dotNext.getValue());
+
             return;
           }
 
@@ -71,8 +106,8 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
               type: "reduce",
               by: item.getConcatenation(),
             });
-            // row.isConflict = true;
-            row.isConflictStateList?.push("$");
+            replaceConflict({ type: "reduce", by: item.getConcatenation() }, "$");
+
             return;
           }
 
@@ -86,8 +121,8 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
                 type: "reduce",
                 by: item.getConcatenation(),
               });
-              // row.isConflict = true;
-              row.isConflictStateList?.push(terminal);
+              replaceConflict({ type: "reduce", by: item.getConcatenation() }, terminal);
+
               return;
             }
             row.actions[terminal] = { type: "reduce", by: item.getConcatenation() };

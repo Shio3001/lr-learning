@@ -4,7 +4,7 @@ import Button from "../atoms/Button";
 
 import { getRawBNFWarningThrows, parseRawBnf, getTerminalSymbols, getLeftSymbols } from "../compiler/parseBnf";
 import lr0 from "../compiler/lr0";
-import { BNFSet } from "../compiler/interface/bnf";
+import { BNFSet, BNFElement, BNFConcatenation } from "../compiler/interface/bnf";
 
 import { useEffect, useState, useReducer } from "react";
 import AutomatonGraph from "../component/AutomatonGraph";
@@ -20,6 +20,7 @@ import TreeView from "../component/TreeView";
 import LinterExercise from "../component/LinterExercise";
 import { ParseTreeNode, ParseLog } from "../compiler/interface/tree";
 import { linterReducer, bootRules } from "../helper/studyLitner";
+import { ViewConflict } from "../component/ViewConflict";
 
 const MainPage = () => {
   // const [bnf, setBnf] = useState<string>("S->STMT 'EoF'\nSTMT->'Ex' EXP\nEXP->'NUM'");
@@ -193,27 +194,7 @@ const MainPage = () => {
       <p>コンフリクトが発生しているセルは赤色で表示されます。</p>
       {/* コンフリクト発生個所を表示 */}
       <div>
-        <h3>コンフリクト発生箇所</h3>
-        {(table as TransitionTable)
-          .map((row) => {
-            const conflicts: string[] = [];
-            // if (row.isConflict) {
-            //   conflicts.push(`状態 ${row.state} にコンフリクトがあります。`);
-            // }
-            if (row.isConflictStateList && row.isConflictStateList.length > 0) {
-              row.isConflictStateList.forEach((token) => {
-                conflicts.push(`状態 ${row.state}、トークン '${token}' にコンフリクトがあります。`);
-              });
-            }
-            return conflicts;
-          })
-          .flat()
-          .map((msg, i) => (
-            <p key={i} style={{ color: "red" }}>
-              {msg}
-            </p>
-          ))}
-        {(table as TransitionTable).every((row) => !row.isConflictStateList || row.isConflictStateList.length === 0) && <p>コンフリクトは発生していません。</p>}
+        <ViewConflict table={table} />
       </div>
 
       <h2>構文解析したいプログラムを入力してください（TypeScript処理系準拠）</h2>

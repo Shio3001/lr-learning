@@ -75,19 +75,33 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
                 style={{
                   backgroundColor: (() => {
                     if (lightUpState === row.state && lightUpToken === terminal) return "yellow";
-                    if (row.isConflictStateList?.includes(terminal)) return "red";
+                    if (row.actions[terminal]?.type === "conflict") return "red";
                     return "transparent";
                   })(),
                 }}
               >
-                {row.actions[terminal]
+                {/* {row.actions[terminal]
                   ? row.actions[terminal].type === "shift"
                     ? `S${row.actions[terminal].toState}`
                     : row.actions[terminal].type === "reduce"
-                    ? // ? `R(${row.actions[terminal].by.getLeft()}->${row.actions[terminal].by.getRight().join(" ")})`
+                    ? // conflict時
                       `R(${row.actions[terminal].by.getAsString()})`
                     : "ACC"
-                  : ""}
+                  : ""} */}
+                {(() => {
+                  const action = row.actions[terminal];
+                  if (!action) return "";
+                  if (action.type === "shift") {
+                    return `S${action.toState}`;
+                  } else if (action.type === "reduce") {
+                    return `R(${action.by.getAsString()})`;
+                  } else if (action.type === "accept") {
+                    return "ACC";
+                  } else if (action.type === "conflict") {
+                    return `C(${action.list.map((by) => (by === null ? "シフト" : typeof by === "number" ? `S${by}` : `R(${by.getAsString()})`)).join(", ")})`;
+                  }
+                  return "";
+                })()}
               </td>
             ))}
             {getGotosKeys().map((nonTerminal) => (
@@ -95,7 +109,7 @@ const LRTable: React.FC<LRTableProps> = ({ table, lightUpState, lightUpToken }) 
                 style={{
                   backgroundColor: (() => {
                     if (lightUpState === row.state && lightUpToken === nonTerminal) return "yellow";
-                    if (row.isConflictStateList?.includes(nonTerminal)) return "red";
+                    // if (row.gotos[nonTerminal]?.type === "conflict") return "red";
                     return "transparent";
                   })(),
                 }}
