@@ -110,12 +110,14 @@ const setShift = (row: TransitionTableRow, terminal: string, to: number) => {
 };
 
 /** 冪等な reduce 設定 */
-const setReduce = (row: TransitionTableRow, terminal: string, by: BNFConcatenation) => {
+// isLoose = true の場合、競合先がsihftのみなら何もせず、握りつぶす
+const setReduce = (row: TransitionTableRow, terminal: string, by: BNFConcatenation, isLoose: boolean = false) => {
   const ex = row.actions[terminal];
   if (!ex) {
     row.actions[terminal] = { type: "reduce", by };
     return;
   }
+  if (isLoose && ex.type === "shift") return; // SHIFT優先モードなら握りつぶす
   if (ex.type === "reduce" && eqConcat(ex.by, by)) return;
   replaceConflict(row, terminal, { type: "reduce", by });
 };
@@ -128,7 +130,7 @@ const parseSymKey = (k: string): { isTerm: boolean; v: string } => {
 };
 
 /** LR(1)：アイテム集合配列から状態遷移表を作成 */
-export const makeTransitionTableLR1 = (lrItemSets: LR1ItemSet[], bnfSet: BNFSet): TransitionTable => {
+export const makeTransitionTableLR1 = (lrItemSets: LR1ItemSet[], bnfSet: BNFSet, isLoose: boolean = false): TransitionTable => {
   const startSymbol = getStartSymbol(bnfSet);
   const table: TransitionTable = [];
 
@@ -187,7 +189,7 @@ export const makeTransitionTableLR1 = (lrItemSets: LR1ItemSet[], bnfSet: BNFSet)
       }
 
       const reduceBy = item.getConcatenation();
-      lookaheads.forEach((t) => setReduce(row, t, reduceBy));
+      lookaheads.forEach((t) => setReduce(row, t, reduceBy, isLoose));
     });
 
     table.push(row);
