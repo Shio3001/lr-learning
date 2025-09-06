@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import LRTable from "./LRTable";
 import TreeView from "./TreeView";
 
@@ -34,6 +34,10 @@ const ParseTimeline: React.FC<ParseTimelineProps> = ({ table, trees }) => {
   const setAll = (value: boolean) => {
     setOpenStates(Array(trees.length).fill(value));
   };
+
+  useEffect(() => {
+    setOpenStates(Array(trees.length).fill(false));
+  }, [trees]);
 
   return (
     <div>

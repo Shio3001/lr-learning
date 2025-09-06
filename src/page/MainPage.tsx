@@ -32,6 +32,26 @@ type ParseLogs = (string | ParseLog)[];
 type LrSets = LR0ItemSet[] | LR1ItemSet[];
 type Tab = "lex" | "parse" | "lrauto" | "lint";
 
+// 構文解析文法規則のサンプル一覧定義
+const sampleBNFs: { name: string; bnf: string }[] = [
+  {
+    name: "算術式",
+    bnf: `
+S -> EXPR
+EXPR -> EXPR PlusToken TERM | EXPR MinusToken TERM | TERM
+TERM -> TERM AsteriskToken FACTOR | FACTOR
+FACTOR -> OpenParenToken EXPR CloseParenToken | MinusToken FACTOR | FirstLiteralToken
+    `.trim(),
+  },
+  {
+    name: "if文",
+    bnf: `
+S    -> IfKeyword Identifier TAIL
+TAIL -> ElseKeyword IfKeyword Identifier TAIL | ElseKeyword Identifier | ε
+    `.trim(),
+  },
+];
+
 const MainPage = () => {
   const [activeTab, setActiveTab] = useState<Tab>("lex");
 
@@ -294,6 +314,24 @@ const MainPage = () => {
 
           <h5>上記に加えて、以下のワードも終端記号として認識されます。</h5>
           <p style={{ fontSize: 10 }}>{tsKinds.join(" ")}</p>
+
+          {/* サンプル選択ボタン   */}
+          <div style={{ marginTop: 12, marginBottom: 12 }}>
+            <strong>構文定義サンプル:</strong>
+            {sampleBNFs.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => setBnf(s.bnf)}
+                style={{
+                  marginLeft: 8,
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                }}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
 
           {/* BNF エラー表示 */}
           <div>
