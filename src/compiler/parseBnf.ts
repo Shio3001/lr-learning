@@ -71,8 +71,9 @@ export const parseRawBnf = (bnf: string, kinds: Array<string>): BNFSet => {
 
         // εなら空集合
         if (sym === "ε") {
-          element.setType("terminal");
-          element.setValue(""); // εは空集合を表す
+          // element.setType("terminal");
+          // element.setValue("ε"); // εは空集合を表す
+          return; // εは要素として追加しない（空集合を表す）
         }
         // kindsに含まれている場合は予約語として扱う
         else if (kinds.includes(sym)) {

@@ -250,9 +250,10 @@ const MainPage = () => {
           </div>
 
           <h3>構文定義（BNF）</h3>
-          <PredictionTextarea text={bnf} handler={setBnf} candidates={bnfCandidates} />
+          <PredictionTextarea text={bnf} handler={setBnf} candidates={bnfCandidates} symbolShortcuts={[{ key: "epsilon", value: "ε", minTrigger: 2 }]} />
           <h4>現在の構文解析予約語一覧</h4>
           <p>{reservedWords.join(" ")}</p>
+          <p>空集合εを入力するには、epsilonを入力してください</p>
 
           <h5>上記に加えて、以下のワードも終端記号として認識されます。</h5>
           <p style={{ fontSize: 10 }}>{tsKinds.join(" ")}</p>

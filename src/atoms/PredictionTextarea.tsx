@@ -15,6 +15,29 @@ export type TextareaProps = {
   maxSuggestions?: number;
   /** 候補単語を区切りとして使うか（デフォルト: true） */
   candidateAsDelimiter?: boolean;
+
+  /** 置換ショートカット（例: epsilon → ε） */
+  symbolShortcuts?: Array<{
+    /** 入力側のキー（例: "epsilon"） */
+    key: string;
+    /** 確定時に挿入する文字列（例: "ε"） */
+    value: string;
+    /** このキーに対して候補を出す最小入力文字数（未指定は minShortcutTrigger を使用） */
+    minTrigger?: number;
+  }>;
+  /** 置換ショートカットの全体デフォ最小文字数（既定: 2） */
+  minShortcutTrigger?: number;
+};
+
+type Suggestion = {
+  /** リストに表示するラベル */
+  label: string;
+  /** 挿入する実値 */
+  insert: string;
+  /** 重複排除用キー */
+  id: string;
+  /** ソースの種類 */
+  source: "candidate" | "shortcut";
 };
 
 const defaultDelimiter = /[\s\t\n\r.,;:(){}[\]"'`!?]+/;
@@ -48,7 +71,18 @@ const styles = {
     padding: "8px 12px",
     cursor: "pointer",
     background: active ? "#f0f7ff" : "#fff",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
   }),
+  tag: {
+    fontSize: 11,
+    color: "#666",
+    border: "1px solid #ddd",
+    borderRadius: 4,
+    padding: "0 6px",
+    whiteSpace: "nowrap" as const,
+  },
   hint: {
     fontSize: 12,
     color: "#888",
@@ -89,21 +123,17 @@ function buildBoundaryRegex(base: RegExp, candidates: string[], caseSensitive: b
   const baseFlags = base.flags.includes("g") ? base.flags : base.flags + "g";
 
   if (!candidateAsDelimiter || candidates.length === 0) {
-    // base だけ。ただし g フラグを必ず付ける
     const flags = caseSensitive ? baseFlags.replace(/i/g, "") : baseFlags.includes("i") ? baseFlags : baseFlags + "i";
     return new RegExp(baseSrc, flags);
   }
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // 長い候補から並べることで最長一致寄りの挙動を多少担保
   const pattern = candidates
     .slice()
     .sort((a, b) => b.length - a.length)
     .map(esc)
     .join("|");
 
-  // base か 候補語 のいずれかにマッチ
-  // 例: /(?:[\s.,]+)|(?:function|return|record)/gi
   let flags = "g";
   if (!caseSensitive) flags += "i";
   return new RegExp(`(?:${baseSrc})|(?:${pattern})`, flags);
@@ -111,21 +141,18 @@ function buildBoundaryRegex(base: RegExp, candidates: string[], caseSensitive: b
 
 /** “区切り”のマッチ位置列から、caret を含む単語範囲を計算 */
 function pickWordRangeByRegex(text: string, caret: number, boundary: RegExp): { start: number; end: number; word: string } {
-  // 全マッチを集める（区切りは [start, end)）
   boundary.lastIndex = 0;
   const seps: Array<{ s: number; e: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = boundary.exec(text)) !== null) {
     const s = m.index;
     const e = s + m[0].length;
-    // 安全装置: 無限ループ回避（0幅は想定しないが念のため）
     if (e === s) {
       boundary.lastIndex = e + 1;
     }
     seps.push({ s, e });
   }
 
-  // caret の直前で終わる最終区切りと、caret 以降で始まる最初の区切りを探す
   let prevEnd = 0;
   let nextStart = text.length;
 
@@ -152,6 +179,8 @@ const Textarea = ({
   caseSensitive = false,
   maxSuggestions = 10,
   candidateAsDelimiter = true,
+  symbolShortcuts = [], // 追加
+  minShortcutTrigger = 2, // 追加（既定2）
 }: TextareaProps) => {
   const [value, setValue] = useState(text ?? "");
   const [open, setOpen] = useState(false);
@@ -174,13 +203,61 @@ const Textarea = ({
 
   const { start, end, word } = useMemo(() => pickWordRangeByRegex(value, caret, boundaryRegex), [value, caret, boundaryRegex]);
 
-  const suggestions = useMemo(() => {
+  // ---- 追加: ショートカット候補の生成 ----
+  const shortcutSuggestions: Suggestion[] = useMemo(() => {
+    const wNorm = normalize(word, caseSensitive);
+    if (!wNorm) return [];
+    const out: Suggestion[] = [];
+
+    for (const sc of symbolShortcuts) {
+      const keyNorm = normalize(sc.key, caseSensitive);
+      const trigger = sc.minTrigger ?? minShortcutTrigger;
+
+      if (wNorm.length >= trigger) {
+        // 前方一致で出す（必要なら substring 対応に拡張可）
+        if (keyNorm.startsWith(wNorm)) {
+          out.push({
+            id: `shortcut:${sc.key}->${sc.value}`,
+            label: sc.value, // 表示は置換後文字を大きく見せたい
+            insert: sc.value, // 確定時に挿入
+            source: "shortcut",
+          });
+        }
+      }
+    }
+
+    // 表示上の安定性：value の長さ（=文字幅）で軽くソート
+    out.sort((a, b) => a.insert.length - b.insert.length);
+    return out;
+  }, [word, symbolShortcuts, caseSensitive, minShortcutTrigger]);
+
+  // 既存の通常候補
+  const normalCandidateSuggestions: Suggestion[] = useMemo(() => {
     if (!candidates?.length) return [];
-    return filterAndRank(word, candidates, {
+    const filtered = filterAndRank(word, candidates, {
       caseSensitive,
       mode: matchMode,
-    }).slice(0, maxSuggestions);
-  }, [word, candidates, caseSensitive, matchMode, maxSuggestions]);
+    });
+    return filtered.map<Suggestion>((s) => ({
+      id: `cand:${s}`,
+      label: s,
+      insert: s,
+      source: "candidate",
+    }));
+  }, [word, candidates, caseSensitive, matchMode]);
+
+  // マージ & 重複排除（insert 基準で一意化） & 上限
+  const suggestions: Suggestion[] = useMemo(() => {
+    const map = new Map<string, Suggestion>();
+    // ショートカットを優先的に先に詰める
+    for (const s of shortcutSuggestions) {
+      if (!map.has(s.insert)) map.set(s.insert, s);
+    }
+    for (const s of normalCandidateSuggestions) {
+      if (!map.has(s.insert)) map.set(s.insert, s);
+    }
+    return Array.from(map.values()).slice(0, maxSuggestions);
+  }, [shortcutSuggestions, normalCandidateSuggestions, maxSuggestions]);
 
   useEffect(() => {
     setOpen(suggestions.length > 0 && word.length > 0);
@@ -188,9 +265,9 @@ const Textarea = ({
   }, [suggestions.length, word]);
 
   const commit = useCallback(
-    (chosen: string) => {
-      const next = value.slice(0, start) + chosen + value.slice(end);
-      const nextCaret = start + chosen.length;
+    (chosen: Suggestion) => {
+      const next = value.slice(0, start) + chosen.insert + value.slice(end);
+      const nextCaret = start + chosen.insert.length;
       setValue(next);
       setOpen(false);
       handler?.(next);
@@ -263,7 +340,7 @@ const Textarea = ({
         <div style={styles.list} role="listbox" aria-label="予測候補">
           {suggestions.map((s, i) => (
             <div
-              key={`${s}-${i}`}
+              key={s.id}
               style={styles.item(i === activeIdx)}
               onMouseEnter={() => setActiveIdx(i)}
               onMouseDown={(e) => {
@@ -273,7 +350,8 @@ const Textarea = ({
               role="option"
               aria-selected={i === activeIdx}
             >
-              {s}
+              <span>{s.label}</span>
+              <span style={styles.tag}>{s.source === "shortcut" ? "置換" : "候補"}</span>
             </div>
           ))}
           <div style={styles.hint}>↑↓で選択 / Enter・Tabで確定 / Escで閉じる</div>
