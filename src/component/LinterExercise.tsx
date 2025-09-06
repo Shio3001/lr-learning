@@ -74,7 +74,7 @@ function findNodeByPath(root: ParseTreeNode, path: number[]): ParseTreeNode | nu
  *             "onMatch"    なら「期待に合ったとき」報告（禁則検知などに便利）
  *  - effectiveInversion: 互換用（true=onMatch/false=onMismatch）
  * ──────────────────────────────────────────────────── */
-type PatternSpecBase = {
+export type PatternSpecBase = {
   id: string;
   parent: string;
   message?: string;

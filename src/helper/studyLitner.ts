@@ -1,6 +1,6 @@
 import { ParseTreeNode } from "../compiler/interface/tree";
 import { Rule } from "./../component/LinterExercise";
-
+import { PatternSpecBase, Diagnostic, RuleContext } from "./../component/LinterExercise";
 // --- デモ用ツリー（差し替えOK）
 export const demoTree: ParseTreeNode = {
   symbol: "S",
@@ -20,44 +20,25 @@ export const demoTree: ParseTreeNode = {
 // --- 初期ルール例
 export const bootRules: Rule[] = [
   {
-    id: "pat.if-head",
-    description: 'Parent "LIST" must start children with: IfKeyword Identifier',
-    severity: "error",
-    enabled: true,
-    kind: "pattern-prefix",
-    check: ({ node, path }) => {
-      if (node.symbol !== "LIST") return;
-      const actual = node.children?.map((c) => c.symbol) ?? [];
-      const expect = ["IfKeyword", "Identifier"];
-      const ok = actual.length >= expect.length && expect.every((s, i) => actual[i] === s);
-      if (!ok) {
-        return [
-          {
-            ruleId: "pat.if-head",
-            message: `Children must start with: [${expect.join(", ")}], but got [${actual.join(", ")}]`,
-            severity: "error",
-            path,
-          },
-        ];
-      }
-    },
-  },
-  {
-    id: "node.no-empty-symbol",
-    description: "空文字や空白だけの symbol を禁止",
-    severity: "error",
+    id: "func.no-else-if",
+    description: 'Function "no-else-if": 「else if」は使わない',
+    severity: "warning",
     enabled: true,
     kind: "function",
     check: ({ node, path }) => {
-      if (!node.symbol || node.symbol.trim() === "") {
-        return [
-          {
-            ruleId: "node.no-empty-symbol",
-            message: "空の symbol が見つかりました。",
-            severity: "error",
-            path,
-          },
-        ];
+      if (node.symbol !== "TAIL") return;
+      const actual = node.children?.map((c) => c.symbol) ?? [];
+      for (let i = 0; i < actual.length - 1; i++) {
+        if (actual[i] === "ElseKeyword" && actual[i + 1] === "IfKeyword") {
+          return [
+            {
+              ruleId: "func.no-else-if",
+              message: `「else if」は使わないでください。`,
+              severity: "warning",
+              path,
+            },
+          ];
+        }
       }
     },
   },
