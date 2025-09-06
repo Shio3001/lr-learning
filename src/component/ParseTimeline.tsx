@@ -85,7 +85,7 @@ const ParseStep: React.FC<ParseStepProps> = ({ index, log, table, open, onToggle
       {open && (
         <>
           <LRTable table={table} lightUpState={log.state} lightUpToken={log.token} />
-          <div style={{ width: "25%" }}>
+          <div style={{ width: "50%" }}>
             <TreeView root={log.tree} />
           </div>
         </>

@@ -30,7 +30,7 @@ const LazyTreesSection = lazy(() => import("../component/ParseTimeline"));
 // 補助型
 type ParseLogs = (string | ParseLog)[];
 type LrSets = LR0ItemSet[] | LR1ItemSet[];
-type Tab = "lex" | "parse" | "lint";
+type Tab = "lex" | "parse" | "lrauto" | "lint";
 
 const MainPage = () => {
   const [activeTab, setActiveTab] = useState<Tab>("lex");
@@ -199,6 +199,7 @@ const MainPage = () => {
       <div style={{ marginBottom: 12 }}>
         {tabBtn("lex", "字句解析")}
         {tabBtn("parse", "構文解析")}
+        {tabBtn("lrauto", "LRオートマトン")}
         {tabBtn("lint", "静的解析（Linter）")}
       </div>
 
@@ -209,7 +210,25 @@ const MainPage = () => {
           <h3>入力プログラム</h3>
           <Textarea text={program} handler={setProgram} />
           <h3>トークン（TypeScript 処理系準拠）</h3>
-          <pre>{JSON.stringify(tokens, null, 2)}</pre>
+          {/* <pre>{JSON.stringify(tokens, null, 2)}</pre> */}
+
+          {/* 表形式で tokenとkindを横に表示 */}
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={{ border: "1px solid #ccc", padding: 8, textAlign: "left" }}>Token</th>
+                <th style={{ border: "1px solid #ccc", padding: 8, textAlign: "left" }}>Kind</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tokens.map((t, i) => (
+                <tr key={i}>
+                  <td style={{ border: "1px solid #ccc", padding: 8, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{t.text}</td>
+                  <td style={{ border: "1px solid #ccc", padding: 8, fontFamily: "monospace" }}>{t.kind}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       )}
 
@@ -251,11 +270,11 @@ const MainPage = () => {
           {lrItemsError && <p style={{ color: "red" }}>LRアイテム生成でエラー: {lrItemsError.message}</p>}
 
           {/* オートマトン可視化 */}
-          <div>
+          {/* <div>
             <ReactFlowProvider>
               <AutomatonGraph terminals={terminals} lrItemSets={lrItemSets as any} />
             </ReactFlowProvider>
-          </div>
+          </div> */}
 
           <LRTable table={table} lightUpState={null} lightUpToken={null} />
           <p>コンフリクトが発生しているセルは赤色で表示されます。</p>
@@ -267,6 +286,39 @@ const MainPage = () => {
           </Suspense>
         </section>
       )}
+      {
+        /* ===== LRオートマトンタブ ===== */
+        activeTab === "lrauto" && (
+          <section>
+            <h2>LRオートマトン</h2>
+            <p>LR(0)法またはLR(1)法で生成されたLRオートマトンを可視化します。</p>
+            <div>
+              <h4>構文一覧</h4>
+              <ul>
+                {/* BNFSetからgetBNFs */}
+                {bnfSet.getBNFs().map((b, i) => (
+                  <li key={i} style={{ fontFamily: "monospace", fontSize: 24 }}>
+                    {b.getLeft()} &rarr;{" "}
+                    {b
+                      .getRight()
+                      .map((c) =>
+                        c
+                          .getElements()
+                          .map((e) => e.getValue())
+                          .join(" ")
+                      )
+                      .join(" | ")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p>ノード数: {lrItemSets.length}</p>
+            <ReactFlowProvider>
+              <AutomatonGraph terminals={terminals} lrItemSets={lrItemSets as any} />
+            </ReactFlowProvider>
+          </section>
+        )
+      }
 
       {/* ===== 静的解析（Linter）タブ ===== */}
       {activeTab === "lint" && (
