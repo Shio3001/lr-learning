@@ -14,7 +14,7 @@ const getStartSymbol = (bnfSet: BNFSet): string => {
 };
 
 // LRItemSetの配列から状態遷移表を作成する
-export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): TransitionTable => {
+export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet, isLoose: boolean = false): TransitionTable => {
   const startSymbol = getStartSymbol(bnfSet);
   const table: TransitionTable = [];
 
@@ -27,6 +27,16 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet): Tr
 
     // 書き換える場所と、新たに発生した遷移を渡すので、rowを書き換える（引数のactionは型の問題からそのまま使ってはならない）
     const replaceConflict = (action: { type: "shift" | "reduce"; by: BNFConcatenation | number }, terminal: string) => {
+      // どちらもshiftで同じなら何もしない
+      if (action.type === "shift" && row.actions[terminal]?.type === "shift" && row.actions[terminal]?.toState === (action.by as number)) {
+        return;
+      }
+
+      if (isLoose && action.type === "reduce" && row.actions[terminal]?.type === "shift") {
+        // SHIFT優先モードなら握りつぶす
+        return;
+      }
+
       if (row.actions[terminal] && row.actions[terminal].type !== "accept") {
         // すでに同じアクションが存在する場合、コンフリクト
         console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[terminal], action);

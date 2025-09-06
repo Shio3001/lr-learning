@@ -57,7 +57,7 @@ const MainPage = () => {
 
   const [bnf, setBnf] = useState<string>("S->LIST 'EoF'\nLIST->'LPAR' SEQ 'RPAR' | 'NUM'\nSEQ -> LIST\nSEQ -> SEQ 'COMMA' LIST");
   const [program, setProgram] = useState<string>("");
-  const [algorithm, setAlgorithm] = useState<"LR0" | "LR1" | "LR1-L">("LR0");
+  const [algorithm, setAlgorithm] = useState<"LR0" | "LR0-L" | "LR1" | "LR1-L">("LR0");
 
   // localStorage 復元（try/catch維持）
   useEffect(() => {
@@ -151,8 +151,8 @@ const MainPage = () => {
   useEffect(() => {
     try {
       const newTable: TransitionTable =
-        algorithm === "LR0"
-          ? makeTransitionTable(lrItemSets as LR0ItemSet[], bnfSet)
+        algorithm === "LR0" || algorithm === "LR0-L"
+          ? makeTransitionTable(lrItemSets as LR0ItemSet[], bnfSet, algorithm === "LR0-L")
           : makeTransitionTableLR1(lrItemSets as LR1ItemSet[], bnfSet, algorithm === "LR1-L");
       setTable({ type: "SET_TABLE", payload: newTable });
     } catch (e) {
@@ -264,6 +264,10 @@ const MainPage = () => {
             <label>
               <input type="radio" value="LR0" checked={algorithm === "LR0"} onChange={() => setAlgorithm("LR0")} />
               LR(0)法
+            </label>
+            <label style={{ marginLeft: 12 }}>
+              <input type="radio" value="LR0-L" checked={algorithm === "LR0-L"} onChange={() => setAlgorithm("LR0-L")} />
+              LR(0)法（SHIFT優先）
             </label>
             <label style={{ marginLeft: 12 }}>
               <input type="radio" value="LR1" checked={algorithm === "LR1"} onChange={() => setAlgorithm("LR1")} />

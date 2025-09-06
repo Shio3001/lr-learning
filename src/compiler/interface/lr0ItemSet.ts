@@ -110,6 +110,9 @@ export class LRItemSet {
             this.addItem(newItem);
 
             const dotNext = newItem.getDotNextElement();
+            if (!dotNext) {
+              return;
+            }
 
             pushRvItems(dotNext.getValue(), newItem.advance());
 
