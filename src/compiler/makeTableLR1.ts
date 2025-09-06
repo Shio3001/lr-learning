@@ -5,19 +5,13 @@ import { LRItemSet } from "./interface/lr0ItemSet";
 import { LR1ItemSet } from "./interface/lr1ItemSet";
 import { LRItem } from "./interface/lrItem";
 import { TransitionTable, TransitionTableRow } from "./interface/transitionTable";
+import { eqConcat } from "../helper/table";
 
 /** 開始記号は S` があれば S`、なければ S */
 const getStartSymbol = (bnfSet: BNFSet): string => {
   if (bnfSet.hasNonTerminal("S`")) return "S`";
   if (bnfSet.hasNonTerminal("S")) return "S";
   throw new Error("BNF定義が空です。");
-};
-
-/** 規則同値判定（equals/toString ではなく getHash を使う） */
-const eqConcat = (a: any, b: any) => {
-  const ah = a?.getHash?.();
-  const bh = b?.getHash?.();
-  return ah != null && bh != null ? ah === bh : a === b;
 };
 
 /** 状態 s が advanced の「コア（規則＋ドット位置）」を含むか */

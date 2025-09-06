@@ -66,7 +66,7 @@ const MainPage = () => {
       if (savedBnf) setBnf(savedBnf);
       const savedProgram = localStorage.getItem("program");
       if (savedProgram) setProgram(savedProgram);
-      const savedAlgorithm = localStorage.getItem("algorithm") as "LR0" | "LR1" | null;
+      const savedAlgorithm = localStorage.getItem("algorithm") as "LR0" | "LR0-L" | "LR1" | "LR1-L" | null;
       if (savedAlgorithm) setAlgorithm(savedAlgorithm);
     } catch (e) {
       console.error(e);
@@ -130,7 +130,7 @@ const MainPage = () => {
     (async () => {
       try {
         setLrItemsError(null);
-        const next = algorithm === "LR0" ? (lr0(bnfSet) as LR0ItemSet[]) : (lr1(bnfSet) as LR1ItemSet[]);
+        const next = algorithm === "LR0" || algorithm === "LR0-L" ? (lr0(bnfSet) as LR0ItemSet[]) : (lr1(bnfSet) as LR1ItemSet[]);
         if (!canceled) setLrItemSets(next);
       } catch (e) {
         if (!canceled) {

@@ -5,6 +5,7 @@ import { LRItemSet } from "./interface/lr0ItemSet";
 import { LR1ItemSet } from "./interface/lr1ItemSet";
 import { LRItem } from "./interface/lrItem";
 import { TransitionTable, TransitionTableRow, ConflictAction } from "./interface/transitionTable";
+import { eqConcat } from "../helper/table";
 
 // 開始記号はS もしくはS`があればS`
 const getStartSymbol = (bnfSet: BNFSet): string => {
@@ -34,6 +35,18 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet, isL
 
       if (isLoose && action.type === "reduce" && row.actions[terminal]?.type === "shift") {
         // SHIFT優先モードなら握りつぶす
+        return;
+      }
+
+      // shiftでもreduceでも、すでに全く同じものがあるなら、何もしない
+      if (action.type === "shift" && row.actions[terminal]?.type === "shift" && row.actions[terminal]?.toState === (action.by as number)) {
+        return;
+      }
+      if (
+        action.type === "reduce" &&
+        row.actions[terminal]?.type === "reduce" &&
+        eqConcat(row.actions[terminal]?.by as BNFConcatenation, action.by as BNFConcatenation)
+      ) {
         return;
       }
 
@@ -83,16 +96,15 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet, isL
         if (dotNext.isTerminal()) {
           // 終端記号ならactionに追加
 
-          if (row.actions[dotNext.getValue()]) {
+          if (row.actions[dotNext.getValue()] && !isLoose) {
             // すでに同じアクションが存在する場合、コンフリクト
             // throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
-            console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[dotNext.getValue()], {
-              type: "shift",
-              toState: nextState,
-            });
+            // console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[dotNext.getValue()], {
+            //   type: "shift",
+            //   toState: nextState,
+            // });
             //conflictActionに書き換える
             replaceConflict({ type: "shift", by: nextState }, dotNext.getValue());
-
             return;
           }
 
@@ -127,13 +139,7 @@ export const makeTransitionTable = (lrItemSets: LRItemSet[], bnfSet: BNFSet, isL
            */
           bnfSet.getAllTerminals().forEach((terminal) => {
             if (row.actions[terminal] && row.actions[terminal].type !== "accept") {
-              // throw new Error(`状態${stateIndex}でアクションのコンフリクトが発生しました。`);
-              console.warn(`状態${stateIndex}でアクションのコンフリクトが発生しました。`, row.actions[terminal], {
-                type: "reduce",
-                by: item.getConcatenation(),
-              });
               replaceConflict({ type: "reduce", by: item.getConcatenation() }, terminal);
-
               return;
             }
             row.actions[terminal] = { type: "reduce", by: item.getConcatenation() };
