@@ -172,7 +172,7 @@ export class LR1ItemSets {
    */
   startCalculation(startLookahead: string = "$") {
     // 1) 開始記号（S` があれば優先）
-    const startLeft = this.grammar.hasNonTerminal("S`") ? "S`" : "S";
+    const startLeft = this.grammar.getStartSymbol().getLeft();
 
     // 2) その左辺の規則を 1 つ取得（S'->S があるならそれ、無ければ S の最初の規則）
     const prods: BNFConcatenation[] = this.grammar.getBNFbyLeft(startLeft);
