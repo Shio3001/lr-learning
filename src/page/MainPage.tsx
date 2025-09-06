@@ -255,6 +255,37 @@ const MainPage = () => {
             </label>
           </div>
 
+          <div>
+            <p>字句解析トークン一覧（{tokens.length}個）:</p>
+            {/* token0 token1 token2 */}
+            {/* kind0 kind1 kind2 のようにtokenが横になるようにtableではなくdivで表っぽく表示  */}
+            {/* 子要素要素幅に合わせること 横幅100px  */}
+            {/* {要素そのものを新しく作る  } */}
+            <div style={{ display: "flex", flexWrap: "wrap" }}>
+              {tokens.map((t, i) => (
+                <div
+                  key={i}
+                  style={{
+                    border: "1px solid #ccc",
+                    padding: "4px 8px",
+                    fontFamily: "monospace",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                    minWidth: 130,
+                    marginBottom: 4,
+                  }}
+                  title={t.text}
+                >
+                  {t.text}
+                  <br />
+                  <span style={{ color: "#888" }}>{t.kind}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <hr style={{ margin: "20px 0" }} />
+
           <h3>構文定義（BNF）</h3>
           <PredictionTextarea text={bnf} handler={setBnf} candidates={bnfCandidates} symbolShortcuts={[{ key: "epsilon", value: "ε", minTrigger: 2 }]} />
           <h4>現在の構文解析予約語一覧</h4>
