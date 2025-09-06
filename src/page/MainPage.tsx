@@ -330,7 +330,7 @@ const MainPage = () => {
             onToggleRule={(id, enabled) => sendLinter({ type: "LINT_RULE_TOGGLE", id, enabled })}
             onRemoveRule={(id) => sendLinter({ type: "LINT_RULE_REMOVE", id })}
             rules={linterStore.ruleList}
-            symbolCandidates={["ROOT", ...kinds]}
+            symbolCandidates={["ROOT", ...kinds, ...leftSymbols]}
             tree={linterTree}
           />
         </section>

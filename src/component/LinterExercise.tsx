@@ -3,8 +3,13 @@ import React, { useMemo, useState } from "react";
 import type { ParseTreeNode } from "../compiler/interface/tree";
 import TextInput from "../atoms/PredictionText"; // あなたのパスに合わせて
 
-/** --- Diagnostic Types --- */
+/** ─────────────────────────────────────────────────────
+ * 診断・ルールの基本型
+ *  severity … 表示上の重要度
+ *  path     … ルートから対象ノードまでのインデックス配列
+ * ──────────────────────────────────────────────────── */
 type Severity = "error" | "warning" | "info";
+
 export type Diagnostic = {
   ruleId: string;
   message: string;
@@ -12,13 +17,16 @@ export type Diagnostic = {
   path: number[];
 };
 
-/** --- Rule Types --- */
 export type RuleContext = {
   node: ParseTreeNode;
   ancestors: ParseTreeNode[];
   path: number[];
 };
 
+/** ルール:
+ *  - kind: ルールの種類（パターン一致 or 関数）
+ *  - trigger: 診断を「一致時に出す」か「不一致時に出す」か
+ */
 export type Rule = {
   id: string;
   description: string;
@@ -26,15 +34,18 @@ export type Rule = {
   check: (ctx: RuleContext) => Diagnostic[] | void;
   enabled?: boolean;
   kind?: "pattern-exact" | "pattern-prefix" | "function";
+  trigger?: "onMatch" | "onMismatch";
 };
 
-/** --- Tree Walk --- */
+/** ─────────────────────────────────────────────────────
+ * 木の走査ユーティリティ
+ * ──────────────────────────────────────────────────── */
 function walk(node: ParseTreeNode, cb: (ctx: RuleContext) => void, ancestors: ParseTreeNode[] = [], path: number[] = []) {
   cb({ node, ancestors, path });
   node.children?.forEach((ch, i) => walk(ch, cb, [...ancestors, node], [...path, i]));
 }
 
-/** --- Helpers --- */
+/** 表示用：パス→「A → B → C」 */
 function pathToString(root: ParseTreeNode, path: number[]): string {
   const labels: string[] = [];
   let cur: ParseTreeNode | undefined = root;
@@ -46,6 +57,8 @@ function pathToString(root: ParseTreeNode, path: number[]): string {
   }
   return labels.join(" → ");
 }
+
+/** ユーティリティ：パスでノード取得 */
 function findNodeByPath(root: ParseTreeNode, path: number[]): ParseTreeNode | null {
   let cur: ParseTreeNode = root;
   for (const i of path) {
@@ -55,100 +68,107 @@ function findNodeByPath(root: ParseTreeNode, path: number[]): ParseTreeNode | nu
   return cur;
 }
 
-/** --- Declarative pattern helpers --- */
-type PatternSpec =
-  | { id: string; parent: string; exactChildren: string[]; message?: string; severity?: Severity; enabled?: boolean; effectiveInversion?: boolean }
-  | { id: string; parent: string; childrenStartsWith: string[]; message?: string; severity?: Severity; enabled?: boolean; effectiveInversion?: boolean };
+/** ─────────────────────────────────────────────────────
+ * 宣言的パターン指定
+ *  - trigger: "onMismatch" なら「期待に合わないとき」報告（デフォルト）
+ *             "onMatch"    なら「期待に合ったとき」報告（禁則検知などに便利）
+ *  - effectiveInversion: 互換用（true=onMatch/false=onMismatch）
+ * ──────────────────────────────────────────────────── */
+type PatternSpecBase = {
+  id: string;
+  parent: string;
+  message?: string;
+  severity?: Severity;
+  enabled?: boolean;
+  trigger?: "onMatch" | "onMismatch";
+  /** @deprecated 旧オプション（true:一致時に報告/false:不一致時に報告） */
+  effectiveInversion?: boolean;
+};
+type PatternSpecExact = PatternSpecBase & { exactChildren: string[] };
+type PatternSpecPrefix = PatternSpecBase & { childrenStartsWith: string[] };
+type PatternSpec = PatternSpecExact | PatternSpecPrefix;
 
+/** trigger 表示用の日本語ラベル */
+function labelForTrigger(tr?: "onMatch" | "onMismatch") {
+  return tr === "onMatch" ? "一致したら報告" : "不一致なら報告";
+}
+
+/** PatternSpec → Rule 変換（ロジック共通化） */
 function patternToRule(p: PatternSpec): Rule {
-  console.log("patternToRule:", p);
+  // 後方互換：effectiveInversion が来たら trigger に変換
+  const trigger: "onMatch" | "onMismatch" = p.trigger ?? (p.effectiveInversion === undefined ? "onMismatch" : p.effectiveInversion ? "onMatch" : "onMismatch");
+
   const base: Omit<Rule, "check"> = {
     id: p.id,
     description:
       "exactChildren" in p
-        ? `Parent "${(p as any).parent}" の子が [${(p as any).exactChildren.join(", ")}] と完全一致`
-        : `Parent "${(p as any).parent}" の子が [${(p as any).childrenStartsWith.join(", ")}] で始まる`,
+        ? `親 "${(p as PatternSpecExact).parent}" の子が [${(p as PatternSpecExact).exactChildren.join(", ")}] と完全一致`
+        : `親 "${(p as PatternSpecPrefix).parent}" の子が [${(p as PatternSpecPrefix).childrenStartsWith.join(", ")}] で始まる`,
     severity: (p as any).severity ?? "error",
     enabled: (p as any).enabled ?? true,
     kind: "exactChildren" in p ? "pattern-exact" : "pattern-prefix",
+    trigger,
   };
 
-  // Effective inversion true : 条件に一致するとき警告を出す。 false : 条件に一致しないとき、警告を出す
-  const effectiveInversion = p.effectiveInversion ?? true;
+  /** 診断を出すかどうかの最終判定 */
+  const shouldReport = (ok: boolean) => (trigger === "onMatch" ? ok : !ok);
 
   if ("exactChildren" in p) {
+    const expect = p.exactChildren;
     return {
       ...base,
       check: ({ node, path }) => {
         if (node.symbol !== p.parent) return;
         const actual = node.children?.map((c) => c.symbol) ?? [];
-        const expect = p.exactChildren;
-
-        // ルールに合致したかどうか
         const ok = actual.length === expect.length && actual.every((s, i) => s === expect[i]);
 
-        // effectiveInversion に応じて、ok の真偽を反転させる
-        if (!ok && !effectiveInversion) {
-          return [
-            {
-              ruleId: p.id,
-              // message: p.message ?? `Expected children: [${expect.join(", ")}], but got [${actual.join(", ")}]`,
-              // 日本語で
-              message: p.message ?? `子要素が [${expect.join(", ")}] と完全一致する必要がありますが、[${actual.join(", ")}] になっています`,
-              severity: base.severity!,
-              path,
-            },
-          ];
-        }
-
-        if (ok && effectiveInversion) {
-          return [
-            {
-              ruleId: p.id,
-              message: p.message ?? `子要素が [${expect.join(", ")}] と完全一致しています。`,
-              severity: base.severity!,
-              path,
-            },
-          ];
-        }
+        if (!shouldReport(ok)) return;
+        const message =
+          p.message ??
+          (ok
+            ? `子要素が [${expect.join(", ")}] と完全一致しています。`
+            : `子要素は [${expect.join(", ")}] と完全一致すべきですが、[${actual.join(", ")}] になっています。`);
+        return [
+          {
+            ruleId: p.id,
+            message,
+            severity: base.severity!,
+            path,
+          },
+        ];
       },
     };
   } else {
+    const expect = p.childrenStartsWith;
     return {
       ...base,
       check: ({ node, path }) => {
         if (node.symbol !== p.parent) return;
         const actual = node.children?.map((c) => c.symbol) ?? [];
-        const expect = p.childrenStartsWith;
         const ok = actual.length >= expect.length && expect.every((s, i) => actual[i] === s);
-        if (!ok && !effectiveInversion) {
-          return [
-            {
-              ruleId: p.id,
-              //   message: p.message ?? `Children must start with: [${expect.join(", ")}], but got [${actual.join(", ")}]`
-              // 日本語で,
-              message: p.message ?? `子要素が [${expect.join(", ")}] で始まる必要がありますが、[${actual.join(", ")}] になっています`,
-              severity: base.severity!,
-              path,
-            },
-          ];
-        }
-        if (ok && effectiveInversion) {
-          return [
-            {
-              ruleId: p.id,
-              message: p.message ?? `子要素が [${expect.join(", ")}] で始まっています。`,
-              severity: base.severity!,
-              path,
-            },
-          ];
-        }
+
+        if (!shouldReport(ok)) return;
+        const message =
+          p.message ??
+          (ok
+            ? `子要素が [${expect.join(", ")}] で始まっています。`
+            : `子要素は [${expect.join(", ")}] で始まるべきですが、[${actual.join(", ")}] になっています。`);
+        return [
+          {
+            ruleId: p.id,
+            message,
+            severity: base.severity!,
+            path,
+          },
+        ];
       },
     };
   }
 }
 
-/** --- Props（親で完全管理） --- */
+/** ─────────────────────────────────────────────────────
+ * 親コンポーネントから完全管理される props
+ * ──────────────────────────────────────────────────── */
 type Props = {
   tree: ParseTreeNode;
   title?: string;
@@ -160,7 +180,7 @@ type Props = {
 };
 
 export default function LinterExercise({ tree, title = "Linter Exercise", rules, symbolCandidates, onUpsertRule, onToggleRule, onRemoveRule }: Props) {
-  // 診断は rules から算出（rules は親制御）
+  // ルール群から診断を計算
   const diagnostics = useMemo<Diagnostic[]>(() => {
     const out: Diagnostic[] = [];
     walk(tree, (ctx) => {
@@ -170,10 +190,10 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
         if (Array.isArray(res) && res.length) out.push(...res);
       }
     });
+    // 重複排除（ruleId+path+message）
     const key = (d: Diagnostic) => `${d.ruleId}@${d.path.join(".")}:${d.message}`;
     const m = new Map<string, Diagnostic>();
     out.forEach((d) => m.set(key(d), d));
-    console.log("LinterExercise: calculating diagnostics...", tree, rules, m.values());
     return Array.from(m.values());
   }, [tree, rules]);
 
@@ -186,7 +206,7 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
 
       <div style={styles.topRow}>
         <fieldset style={styles.rulesBox}>
-          <legend style={styles.legend}>Rules</legend>
+          <legend style={styles.legend}>ルール</legend>
 
           <RuleBuilder symbolCandidates={symbolCandidates} onAdd={(spec) => onUpsertRule(patternToRule(spec))} existing={rules} />
 
@@ -197,7 +217,9 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
                   <label style={{ cursor: "pointer", flex: "1 1 auto" }}>
                     <input type="checkbox" checked={!!(r.enabled ?? true)} onChange={(e) => onToggleRule(r.id, e.target.checked)} style={{ marginRight: 6 }} />
                     <strong>{r.id}</strong> <em style={{ color: colorBySeverity(r.severity ?? "error") }}>[{r.severity ?? "error"}]</em>{" "}
-                    <span style={{ color: "#888" }}>({r.kind ?? "function"})</span>
+                    <span style={{ color: "#888" }}>
+                      （{r.kind ?? "function"} / {labelForTrigger(r.trigger)}）
+                    </span>
                     <div style={{ fontSize: 12, color: "#333" }}>{r.description}</div>
                   </label>
                   <button onClick={() => onRemoveRule(r.id)} style={styles.dangerBtn} title="このルールを削除">
@@ -210,9 +232,9 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
         </fieldset>
 
         <fieldset style={styles.diagBox}>
-          <legend style={styles.legend}>Linterもどきエラー</legend>
+          <legend style={styles.legend}>Linterもどき診断</legend>
           {diagnostics.length === 0 ? (
-            <div style={{ color: "#6a6a6a" }}>No issues </div>
+            <div style={{ color: "#6a6a6a" }}>問題は検出されませんでした</div>
           ) : (
             <ol style={{ margin: 0, paddingLeft: 20 }}>
               {diagnostics.map((d, i) => (
@@ -251,7 +273,7 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
 
       {focusedNode && (
         <fieldset style={styles.detailBox}>
-          <legend style={styles.legend}>Focused Node</legend>
+          <legend style={styles.legend}>フォーカス中ノード</legend>
           <div>
             <div>
               <strong>symbol:</strong> <code>{focusedNode.symbol}</code>
@@ -269,7 +291,9 @@ export default function LinterExercise({ tree, title = "Linter Exercise", rules,
   );
 }
 
-/** --- Rule Builder (TextInput 採用) --- */
+/** ─────────────────────────────────────────────────────
+ * ルールビルダー（TextInput 採用）
+ * ──────────────────────────────────────────────────── */
 function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: PatternSpec) => void; existing: Rule[]; symbolCandidates: string[] }) {
   const [mode, setMode] = useState<"pattern-exact" | "pattern-prefix">("pattern-prefix");
   const [id, setId] = useState("");
@@ -277,9 +301,8 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
   const [childrenText, setChildrenText] = useState("");
   const [severity, setSeverity] = useState<Severity>("error");
   const [message, setMessage] = useState("");
-
-  //Effective inversion true : 条件に一致するとき警告を出す。 false : 条件に一致しないとき、警告を出す
-  const [effectiveInversion, setEffectiveInversion] = useState(true);
+  // 発火条件：一致時に報告 or 不一致時に報告（デフォルトは不一致時）
+  const [trigger, setTrigger] = useState<"onMatch" | "onMismatch">("onMismatch");
 
   const children = useMemo(
     () =>
@@ -303,7 +326,7 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         message: message.trim() || undefined,
         severity,
         enabled: true,
-        effectiveInversion,
+        trigger,
       });
     } else {
       onAdd({
@@ -313,16 +336,17 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         message: message.trim() || undefined,
         severity,
         enabled: true,
-        effectiveInversion,
+        trigger,
       });
     }
+    // 入力状態リセット
     setId("");
     setParent("");
     setChildrenText("");
     setMessage("");
     setSeverity("error");
     setMode("pattern-prefix");
-    setEffectiveInversion(true);
+    setTrigger("onMismatch");
   };
 
   return (
@@ -331,12 +355,12 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         <label style={styles.lbl}>
           種類
           <select value={mode} onChange={(e) => setMode(e.target.value as "pattern-exact" | "pattern-prefix")} style={styles.input}>
-            <option value="pattern-prefix">子要素先頭一致</option>
-            <option value="pattern-exact">完全一致</option>
+            <option value="pattern-prefix">子要素 先頭一致</option>
+            <option value="pattern-exact">子要素 完全一致</option>
           </select>
         </label>
         <label style={styles.lbl}>
-          表示区分（仮想重要度）
+          表示区分（重要度）
           <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)} style={styles.input}>
             <option value="error">error</option>
             <option value="warning">warning</option>
@@ -344,10 +368,10 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
           </select>
         </label>
         <label style={styles.lbl}>
-          有効化反転
-          <select value={effectiveInversion ? "true" : "false"} onChange={(e) => setEffectiveInversion(e.target.value === "true")} style={styles.input}>
-            <option value="true">条件に一致するとき警告</option>
-            <option value="false">条件に一致しないとき警告</option>
+          発火条件
+          <select value={trigger} onChange={(e) => setTrigger(e.target.value as "onMatch" | "onMismatch")} style={styles.input}>
+            <option value="onMismatch">不一致なら報告</option>
+            <option value="onMatch">一致したら報告</option>
           </select>
         </label>
       </div>
@@ -356,7 +380,7 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         <label style={styles.lblWide}>
           ルール名（ユニーク）
           <input value={id} onChange={(e) => setId(e.target.value)} placeholder="例: pat.list-head" style={styles.input} />
-          {idClash && <span style={{ color: "#d32f2f", fontSize: 12, marginLeft: 8 }}>その 名 は既に使われています</span>}
+          {idClash && <span style={{ color: "#d32f2f", fontSize: 12, marginLeft: 8 }}>その名前は既に使われています</span>}
         </label>
       </div>
 
@@ -391,7 +415,7 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
       <div style={styles.builderRow}>
         <label style={styles.lblWide}>
           メッセージ（任意）
-          <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="出したい診断メッセージ" style={styles.input} />
+          <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="出したい診断メッセージ（空なら自動文言）" style={styles.input} />
         </label>
       </div>
 
@@ -406,15 +430,15 @@ function RuleBuilder({ onAdd, existing, symbolCandidates }: { onAdd: (spec: Patt
         </button>
         <span style={{ fontSize: 12, color: "#666" }}>
           {mode === "pattern-exact"
-            ? `Parent "${parent || "…"}" の子が [${children.join(", ") || "…"}] と完全一致`
-            : `Parent "${parent || "…"}" の子が [${children.join(", ") || "…"}] で始まる`}
+            ? `親 "${parent || "…"}" の子が [${children.join(", ") || "…"}] と完全一致（${labelForTrigger(trigger)}）`
+            : `親 "${parent || "…"}" の子が [${children.join(", ") || "…"}] で始まる（${labelForTrigger(trigger)}）`}
         </span>
       </div>
     </div>
   );
 }
 
-/** --- Tree 表示 --- */
+/** Tree 表示（簡易） */
 function TreeView({ root, focusPath, onSelectPath }: { root: ParseTreeNode; focusPath: number[] | null; onSelectPath: (p: number[] | null) => void }) {
   return (
     <div>
@@ -433,7 +457,7 @@ function NodeItem({
   focusPath: number[] | null;
   onSelectPath: (p: number[] | null) => void;
 }) {
-  const isFocused = focusPath && focusPath.length === path.length && focusPath.every((v, i) => v === path[i]);
+  const isFocused = !!(focusPath && focusPath.length === path.length && focusPath.every((v, i) => v === path[i]));
   return (
     <div style={{ margin: "4px 0 4px 16px" }}>
       <div
@@ -462,7 +486,7 @@ function NodeItem({
   );
 }
 
-/** --- Styles & Colors --- */
+/** スタイル */
 const styles: Record<string, React.CSSProperties> = {
   container: { fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji'", lineHeight: 1.45, color: "#222" },
   topRow: { display: "grid", gridTemplateColumns: "2fr 3fr", gap: 16, alignItems: "start", marginBottom: 12 },
@@ -481,6 +505,7 @@ const styles: Record<string, React.CSSProperties> = {
   primaryBtnDisabled: { padding: "8px 12px", borderRadius: 8, border: "1px solid #a9c6e8", background: "#cfe3f8", color: "#fff", cursor: "not-allowed" },
   dangerBtn: { padding: "6px 10px", borderRadius: 8, border: "1px solid #d32f2f", background: "#fff", color: "#d32f2f", cursor: "pointer" },
 };
+
 function colorBySeverity(s: Severity): string {
   switch (s) {
     case "error":
