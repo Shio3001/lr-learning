@@ -1,5 +1,3 @@
-// ===== ここから LR(1) 版 追加（同一ファイル内） =====
-
 import { BNFSet, BNFConcatenation, BNFElement } from "./bnf";
 import { FirstSet } from "./firstSet";
 import { LRItem } from "./lrItem";
@@ -246,5 +244,3 @@ export class LR1ItemSets {
     }
   }
 }
-
-// ===== ここまで LR(1) 版 追加 =====
