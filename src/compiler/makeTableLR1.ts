@@ -13,8 +13,24 @@ const getStartSymbol = (bnfSet: BNFSet): string => {
   throw new Error("BNF定義が空です。");
 };
 
-/** 規則同値判定（equals があれば使い、無ければ toString でフォールバック） */
-const eqConcat = (a: any, b: any) => a === b || a?.equals?.(b) || a?.toString?.() === b?.toString?.();
+/** 規則同値判定（equals/toString ではなく getHash を使う） */
+const eqConcat = (a: any, b: any) => {
+  const ah = a?.getHash?.();
+  const bh = b?.getHash?.();
+  return ah != null && bh != null ? ah === bh : a === b;
+};
+
+/** 状態 s が advanced の「コア（規則＋ドット位置）」を含むか */
+const hasCoreItem = (s: any, advanced: LRItem): boolean => {
+  const items: LRItem[] = s.getItems?.() ?? [];
+  const advHash = advanced.getConcatenation()?.getHash?.();
+  const advDot = advanced.getDotPosition?.();
+  return items.some((it: any) => {
+    const sameRule = it.getConcatenation?.().getHash?.() === advHash;
+    const sameDot = it.getDotPosition?.() === advDot;
+    return sameRule && sameDot;
+  });
+};
 
 /** LR(1) の lookahead を Set<string> で取得（実装差を吸収） */
 const getLookaheadSet = (item: LRItem): Set<string> => {
@@ -39,18 +55,6 @@ const conflictPushUnique = (list: Array<number | BNFConcatenation | null>, v: nu
     typeof x === "number" && typeof v === "number" ? x === v : typeof x !== "number" && typeof v !== "number" ? eqConcat(x, v) : false
   );
   if (!has) list.push(v);
-};
-
-/** 状態 s が advanced の「コア（規則＋ドット位置）」を含むか */
-const hasCoreItem = (s: any, advanced: LRItem): boolean => {
-  if (typeof s.hasCoreItem === "function") return s.hasCoreItem(advanced);
-  const items: LRItem[] = s.getItems?.() ?? [];
-  return items.some((it: any) => {
-    const sameRule =
-      it.getConcatenation?.().equals?.(advanced.getConcatenation?.()) ?? it.getConcatenation?.().toString?.() === advanced.getConcatenation?.().toString?.();
-    const sameDot = it.getDotPosition?.() === advanced.getDotPosition?.();
-    return sameRule && sameDot;
-  });
 };
 
 /** 記号ごとにまとめた advanced コア集合をすべて含む唯一の goto 先状態を特定する */
@@ -146,7 +150,12 @@ export const makeTransitionTableLR1 = (lrItemSets: LR1ItemSet[], bnfSet: BNFSet)
     groups.forEach((items, key) => {
       const { isTerm, v } = parseSymKey(key);
       const advanced = items.map((it) => it.advance());
-      const nextState = findGotoStateForGroup(lrItemSets as Array<LR1ItemSet | LRItemSet>, advanced);
+
+      // まず構築済みの goto を利用（存在しない場合のみ総当たり）
+      let nextState = (itemSet as any).getGoto?.(v);
+      if (nextState == null) {
+        nextState = findGotoStateForGroup(lrItemSets as Array<LR1ItemSet | LRItemSet>, advanced);
+      }
 
       if (isTerm) {
         setShift(row, v, nextState);

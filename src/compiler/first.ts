@@ -89,22 +89,3 @@ export const first = (bnfSet: BNFSet): FirstSet => {
 
   return firstSet;
 };
-
-// ある記号列のFirst集合を計算する関数
-export const firstOfSymbols = (symbols: BNFElement[], lookahead: string, firstSet: FirstSet): string[] => {
-  const result: Set<string> = new Set();
-  let canBeNullable = true;
-
-  for (const symbol of symbols) {
-    const symValue = symbol.getValue();
-    if (firstSet[symValue]) {
-      for (const sym of firstSet[symValue]) {
-        if (sym !== "ε") {
-          result.add(sym);
-        }
-      }
-    }
-  }
-
-  return Array.from(result);
-};

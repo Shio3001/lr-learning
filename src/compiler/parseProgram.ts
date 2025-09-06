@@ -29,12 +29,16 @@ export const parseProgram = (
 
     const tableRow = table[currentState];
     if (!tableRow) {
-      throw new Error(`状態${currentState}に対応するテーブル行が存在しません。`);
+      // throw new Error(`状態${currentState}に対応するテーブル行が存在しません。`);
+      logs.push(`状態${currentState}に対応するテーブル行が存在しません。`);
+      break;
     }
 
     const action = tableRow.actions[currentToken.type];
     if (!action) {
-      throw new Error(`状態${currentState}でトークン'${currentToken.type}'に対するアクションが存在しません。`);
+      // throw new Error(`状態${currentState}でトークン'${currentToken.type}'に対するアクションが存在しません。`);
+      logs.push(`状態${currentState}でトークン'${currentToken.type}'に対するアクションが存在しません。`);
+      break;
     }
 
     if (action.type === "shift") {
@@ -66,7 +70,9 @@ export const parseProgram = (
       const currentState = stack[stack.length - 1];
       const gotoState = table[currentState].gotos[action.by.getLeft()];
       if (gotoState === undefined) {
-        throw new Error(`状態${currentState}で非終端記号'${action.by.getLeft()}'に対する遷移が存在しません。`);
+        // throw new Error(`状態${currentState}で非終端記号'${action.by.getLeft()}'に対する遷移が存在しません。`);
+        logs.push(`状態${currentState}で非終端記号'${action.by.getLeft()}'に対する遷移が存在しません。`);
+        break;
       }
       stack.push(gotoState);
       logs.push({
@@ -83,7 +89,9 @@ export const parseProgram = (
       });
       break;
     } else {
-      throw new Error(`未知のアクションタイプです。`);
+      // throw new Error(`未知のアクションタイプです。`);
+      logs.push(`未知のアクションタイプです。`);
+      break;
     }
   }
 

@@ -14,7 +14,10 @@ const lr1 = (bnfSet: BNFSet) => {
   //LRItemSetsLR1のインスタンスを生成
 
   const lrItemSets = new LR1ItemSets(bnfSet, f);
-  return lrItemSets.startCalculation();
+
+  const sc = lrItemSets.startCalculation();
+  console.log("LR(1)決定性有限オートマトン:", sc);
+  return sc;
 };
 
 export default lr1;
